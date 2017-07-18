@@ -1,10 +1,12 @@
 package filelock_test
 
 import (
+	"crypto/md5"
 	"io"
 	"io/ioutil"
 	"lib/fakes"
 	"lib/filelock"
+	"lib/filelock/filelockfakes"
 	"os"
 
 	"code.cloudfoundry.org/cli/cf/errors"
@@ -25,7 +27,7 @@ var _ = Describe("CacheFilelock", func() {
 		fileLockPath = tempFile.Name()
 
 		fakeFileLocker = &fakes.FileLocker{}
-		cacheFileLock = filelock.NewCacheFileLock(fakeFileLocker, fileLockPath)
+		cacheFileLock = filelock.NewCacheFileLock(fakeFileLocker, fileLockPath, md5.New())
 	})
 
 	AfterEach(func() {
@@ -76,7 +78,7 @@ var _ = Describe("CacheFilelock", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				lockerWithLockFile := filelock.NewLocker(lockFile.Name())
-				cacheFileLock = filelock.NewCacheFileLock(lockerWithLockFile, lockFile.Name())
+				cacheFileLock = filelock.NewCacheFileLock(lockerWithLockFile, lockFile.Name(), md5.New())
 			})
 
 			It("is able to read from the same cache file multiple times", func() {
@@ -100,7 +102,7 @@ var _ = Describe("CacheFilelock", func() {
 				BeforeEach(func() {
 					lockFile, err := ioutil.TempFile(os.TempDir(), "updated-lock-file")
 					Expect(err).NotTo(HaveOccurred())
-					cacheFileLock = filelock.NewCacheFileLock(fakeFileLocker, lockFile.Name())
+					cacheFileLock = filelock.NewCacheFileLock(fakeFileLocker, lockFile.Name(), md5.New())
 				})
 				It("closes the locked file", func() {
 					cacheLockedFile, err := cacheFileLock.Open()
@@ -141,17 +143,30 @@ var _ = Describe("CacheFilelock", func() {
 			})
 		})
 
-		Context("when unable to stat the file lock", func() {
+		Context("when unable to open the file lock", func() {
 			BeforeEach(func() {
-				cacheFileLock = filelock.NewCacheFileLock(fakeFileLocker, "some/garbage/path")
+				cacheFileLock = filelock.NewCacheFileLock(fakeFileLocker, "some/garbage/path", md5.New())
 			})
 
 			It("should return an error", func() {
 				_, err := cacheFileLock.Open()
-				Expect(err).To(MatchError("stat file: stat some/garbage/path: no such file or directory"))
+				Expect(err).To(MatchError("open file: open some/garbage/path: no such file or directory"))
 			})
 		})
 
-	})
+		Context("when copying the bytes to the hasher fails", func() {
+			BeforeEach(func() {
+				Expect(ioutil.WriteFile(fileLockPath, []byte("dragonfruit"), os.ModePerm)).To(Succeed())
 
+				badHasher := &filelockfakes.FakeHash{}
+				badHasher.WriteReturns(-1, errors.New("banana"))
+				cacheFileLock = filelock.NewCacheFileLock(fakeFileLocker, fileLockPath, badHasher)
+			})
+
+			It("should return an error", func() {
+				_, err := cacheFileLock.Open()
+				Expect(err).To(MatchError("copy bytes: banana"))
+			})
+		})
+	})
 })

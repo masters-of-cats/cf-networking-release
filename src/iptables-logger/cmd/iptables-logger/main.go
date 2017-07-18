@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/md5"
 	"flag"
 	"fmt"
 	"iptables-logger/config"
@@ -59,7 +60,7 @@ func main() {
 	kernelLogParser := &parser.KernelLogParser{}
 	store := &datastore.Store{
 		Serializer: &serial.Serial{},
-		Locker:     filelock.NewCacheFileLock(filelock.NewLocker(conf.ContainerMetadataFile), conf.ContainerMetadataFile),
+		Locker:     filelock.NewCacheFileLock(filelock.NewLocker(conf.ContainerMetadataFile), conf.ContainerMetadataFile, md5.New()),
 	}
 	containerRepo := &repository.ContainerRepo{
 		Store: store,
