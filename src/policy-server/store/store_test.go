@@ -49,8 +49,12 @@ var _ = Describe("Store", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		group = &store.Group{}
-		destination = &store.Destination{}
-		policy = &store.Policy{}
+		destination = &store.Destination{
+			DriverName: realDb.DriverName(),
+		}
+		policy = &store.Policy{
+			DriverName: realDb.DriverName(),
+		}
 
 		mockDb.DriverNameReturns(realDb.DriverName())
 	})

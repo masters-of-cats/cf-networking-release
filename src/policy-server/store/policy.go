@@ -9,14 +9,16 @@ type PolicyRepo interface {
 }
 
 type Policy struct {
+	DriverName string
 }
 
 func (p *Policy) Create(tx Transaction, source_group_id int, destination_id int) error {
-	_, err := tx.Exec(tx.Rebind(`
-		INSERT INTO policies (group_id, destination_id)
-		SELECT ?, ?
-		WHERE
-		NOT EXISTS (
+	dualStatement := ""
+	if p.DriverName == "mysql" {
+		dualStatement = " FROM DUAL "
+	}
+	_, err := tx.Exec(tx.Rebind(`INSERT INTO policies (group_id, destination_id) SELECT ?, ? `+dualStatement+`
+		WHERE NOT EXISTS (
 			SELECT *
 			FROM policies
 			WHERE group_id = ? AND destination_id = ?

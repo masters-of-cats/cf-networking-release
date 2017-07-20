@@ -99,10 +99,6 @@ func main() {
 		StartTime: time.Now(),
 	}
 
-	storeGroup := &store.Group{}
-	destination := &store.Destination{}
-	policy := &store.Policy{}
-
 	retriableConnector := db.RetriableConnector{
 		Connector:     db.GetConnectionPool,
 		Sleeper:       db.SleeperFunc(time.Sleep),
@@ -131,6 +127,14 @@ func main() {
 
 	timeout := time.Duration(conf.Database.Timeout) * time.Second
 	timeout = timeout - time.Duration(500)*time.Millisecond
+
+	storeGroup := &store.Group{}
+	destination := &store.Destination{
+		DriverName: connectionResult.ConnectionPool.DriverName(),
+	}
+	policy := &store.Policy{
+		DriverName: connectionResult.ConnectionPool.DriverName(),
+	}
 
 	dataStore, err := store.New(
 		connectionResult.ConnectionPool,

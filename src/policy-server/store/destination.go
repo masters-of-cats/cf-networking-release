@@ -9,18 +9,21 @@ type DestinationRepo interface {
 }
 
 type Destination struct {
+	DriverName string
 }
 
 func (d *Destination) Create(tx Transaction, destination_group_id int, port int, protocol string) (int, error) {
-	_, err := tx.Exec(tx.Rebind(`
-		INSERT INTO destinations (group_id, port, protocol)
-		SELECT ?, ?, ?
-		WHERE
-		NOT EXISTS (
-			SELECT *
-			FROM destinations
-			WHERE group_id = ? AND port = ? AND protocol = ?
-		)`),
+	dualStatement := ""
+	if d.DriverName == "mysql" {
+		dualStatement = " FROM DUAL "
+	}
+	_, err := tx.Exec(tx.Rebind(`INSERT INTO destinations (group_id, port, protocol)
+               SELECT ?, ?, ?  `+dualStatement+`
+               WHERE NOT EXISTS (
+                       SELECT *
+                       FROM destinations
+                       WHERE group_id = ? AND port = ? AND protocol = ?
+               )`),
 		destination_group_id,
 		port,
 		protocol,
