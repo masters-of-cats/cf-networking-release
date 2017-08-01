@@ -17,11 +17,12 @@ import (
 
 	pusherConfig "cf-pusher/config"
 
+	"policy-server/api"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
 	"github.com/pivotal-cf-experimental/rainmaker"
-	"policy-server/api"
 )
 
 const Timeout_Check = 20 * time.Minute
@@ -69,8 +70,7 @@ var _ = Describe("how the container network performs at scale", func() {
 			}
 
 			ports = []Ports{
-				{8080, 8080 },
-				{7000, testConfig.ExtraListenPorts },
+				{7000, 7000 + testConfig.ExtraListenPorts},
 			}
 
 			//{"8080", fmt.Sprintf("%s-%s", "7000", strconv.Itoa(testConfig.ExtraListenPorts))}
@@ -111,9 +111,7 @@ var _ = Describe("how the container network performs at scale", func() {
 
 				By(fmt.Sprintf("%s deleting %d policies", ts(), len(proxyApps)*len(tickApps)*len(ports)))
 
-				v0Policies, err := policyClient.GetPolicies(getToken())
-				Expect(err).NotTo(HaveOccurred())
-				Expect(policyClient.DeletePolicies(getToken(), v0Policies)).To(Succeed())
+				Expect(policyClient.DeletePolicies(getToken(), policies)).To(Succeed())
 
 				By(fmt.Sprintf("%s waiting %s for policies to be updated on cells", ts(), policyUpdateWaitTime))
 				time.Sleep(policyUpdateWaitTime)
@@ -329,7 +327,7 @@ func runWithTimeout(operation string, timeout time.Duration, work func()) {
 type RegistryInstancesResponse struct {
 	Instances []struct {
 		ServiceName string `json:"service_name"`
-		Endpoint struct {
+		Endpoint    struct {
 			Value string `json:"value"`
 		} `json:"endpoint"`
 	} `json:"instances"`
