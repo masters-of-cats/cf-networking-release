@@ -24,6 +24,11 @@ type columnUsage struct {
 	columnName     string
 }
 
+type tagEntry struct {
+	tag     int
+	groupID int
+}
+
 var _ = Describe("migrations", func() {
 
 	var (
@@ -62,7 +67,7 @@ var _ = Describe("migrations", func() {
 	})
 
 	Describe("PerformMigrations", func() {
-		Describe("V0", func() {
+		Describe("V1", func() {
 			Context("mysql", func() {
 				BeforeEach(func() {
 					if realDb.DriverName() != "mysql" {
@@ -144,7 +149,7 @@ var _ = Describe("migrations", func() {
 			})
 		})
 
-		Describe("V1", func() {
+		Describe("V2", func() {
 			Context("mysql", func() {
 				BeforeEach(func() {
 					if realDb.DriverName() != "mysql" {
@@ -235,6 +240,110 @@ var _ = Describe("migrations", func() {
 						},
 						columnUsage{
 							constraintName: "destinations_group_id_fkey",
+							columnName:     "group_id",
+						},
+					))
+				})
+			})
+		})
+
+		Describe("V3", func() {
+			It("should migrate data to the tags table", func() {
+				numMigrations, err := migrator.PerformMigrations(realDb.DriverName(), realDb, 2)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(numMigrations).To(Equal(2))
+
+				result, err := realDb.Exec(`
+						INSERT INTO groups (guid) VALUES ('foo'), ('bar'), ('asdfdsf')
+					`)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result.RowsAffected()).To(Equal(int64(3)))
+
+				result, err = realDb.Exec(`
+						DELETE FROM groups WHERE guid = 'bar'
+					`)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result.RowsAffected()).To(Equal(int64(1)))
+
+				numMigrations, err = migrator.PerformMigrations(realDb.DriverName(), realDb, 1)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(numMigrations).To(Equal(1))
+
+				rows, err := realDb.Query(`
+						SELECT tag, group_id
+						FROM tags
+					`)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("checking there's an entry migrated over from the group table")
+				actualTagsEntries := scanTagsRows(rows)
+				Expect(actualTagsEntries).To(ConsistOf(tagEntry{
+					tag:     1,
+					groupID: 1,
+				},
+					tagEntry{
+						tag:     3,
+						groupID: 3,
+					},
+				))
+			})
+
+			Context("mysql", func() {
+				BeforeEach(func() {
+					if realDb.DriverName() != "mysql" {
+						Skip("skipping mysql tests")
+					}
+				})
+
+				It("should update the schema", func() {
+					numMigrations, err := migrator.PerformMigrations(realDb.DriverName(), realDb, 3)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(numMigrations).To(Equal(3))
+
+					rows, err := realDb.Query(`
+						select CONSTRAINT_NAME, COLUMN_NAME
+						from INFORMATION_SCHEMA.KEY_COLUMN_USAGE t1
+						where TABLE_NAME='tags'
+					`)
+					Expect(err).NotTo(HaveOccurred())
+
+					By("checking there's a constraint on group_id, tag")
+					actualColumnUsageRows := scanColumnUsageRows(rows)
+					Expect(actualColumnUsageRows).To(ConsistOf(columnUsage{
+						constraintName: "PRIMARY",
+						columnName:     "tag",
+					},
+					))
+				})
+			})
+
+			Context("postgres", func() {
+				BeforeEach(func() {
+					if realDb.DriverName() != "postgres" {
+						Skip("skipping postgres tests")
+					}
+				})
+
+				It("should update the schema", func() {
+					numMigrations, err := migrator.PerformMigrations(realDb.DriverName(), realDb, 3)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(numMigrations).To(Equal(3))
+
+					rows, err := realDb.Query(`
+						select CONSTRAINT_NAME, COLUMN_NAME
+						from INFORMATION_SCHEMA.KEY_COLUMN_USAGE t1
+						where TABLE_NAME='tags'
+					`)
+					Expect(err).NotTo(HaveOccurred())
+
+					By("checking there's a constraint on group_id, tag")
+					actualColumnUsageRows := scanColumnUsageRows(rows)
+					Expect(actualColumnUsageRows).To(ConsistOf(columnUsage{
+						constraintName: "tags_pkey",
+						columnName:     "tag",
+					},
+						columnUsage{
+							constraintName: "tags_group_id_fkey",
 							columnName:     "group_id",
 						},
 					))
@@ -364,6 +473,23 @@ func scanColumnUsageRows(rows *sql.Rows) []columnUsage {
 		actual = append(actual, columnUsage{
 			constraintName: constraintName,
 			columnName:     columnName,
+		})
+	}
+	Expect(rows.Err()).NotTo(HaveOccurred())
+	return actual
+}
+
+func scanTagsRows(rows *sql.Rows) []tagEntry {
+	actual := []tagEntry{}
+	defer rows.Close()
+	for rows.Next() {
+		var tag int
+		var groupID int
+
+		Expect(rows.Scan(&tag, &groupID)).To(Succeed())
+		actual = append(actual, tagEntry{
+			tag:     tag,
+			groupID: groupID,
 		})
 	}
 	Expect(rows.Err()).NotTo(HaveOccurred())
