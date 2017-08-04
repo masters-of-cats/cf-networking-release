@@ -6,22 +6,22 @@ cd cf-networking-release
 export GOPATH=$PWD
 
 declare -a packages=(
-  "src/cf-pusher"
-  "src/cli-plugin"
-  "src/example-apps"
-  "src/iptables-logger"
-  "src/lib"
-  "src/netmon"
-  "src/policy-server"
+  # "src/cf-pusher"
+  # "src/cli-plugin"
+  # "src/example-apps"
+  # "src/iptables-logger"
+  # "src/lib"
+  # "src/netmon"
+  "src/policy-server/integration"
   )
 
-declare -a serial_packages=(
-  "src/cni-teardown"
-  "src/cni-wrapper-plugin"
-  "src/garden-external-networker"
-  "src/policy-server/integration/timeouts"
-  "src/vxlan-policy-agent"
-  )
+# declare -a serial_packages=(
+#   "src/cni-teardown"
+#   "src/cni-wrapper-plugin"
+#   "src/garden-external-networker"
+#   "src/policy-server/integration/timeouts"
+#   "src/vxlan-policy-agent"
+#   )
 
 function bootDB {
   db=$1
@@ -60,14 +60,14 @@ bootDB "${DB:-"notset"}"
 if [ "${1:-""}" = "" ]; then
   for dir in "${packages[@]}"; do
     pushd "$dir"
-      ginkgo -r -p --race -randomizeAllSpecs -randomizeSuites -failFast "${@:2}" --skipPackage=timeouts
+      ginkgo -r -p --race -randomizeAllSpecs -randomizeSuites -failFast "${@:2}" --skipPackage=timeouts --untilItFails
     popd
   done
-  for dir in "${serial_packages[@]}"; do
-    pushd "$dir"
-      ginkgo -r -randomizeAllSpecs -randomizeSuites -failFast "${@:2}"
-    popd
-  done
+  # for dir in "${serial_packages[@]}"; do
+  #   pushd "$dir"
+  #     ginkgo -r -randomizeAllSpecs -randomizeSuites -failFast "${@:2}"
+  #   popd
+  # done
 else
   ginkgo -r -randomizeAllSpecs -randomizeSuites "${@}"
 fi

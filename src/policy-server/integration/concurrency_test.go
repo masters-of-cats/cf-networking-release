@@ -124,7 +124,7 @@ var _ = Describe("External API Concurrency", func() {
 		})
 	})
 
-	Context("when these are concurrent create and delete requests", func() {
+	FContext("when these are concurrent create and delete requests", func() {
 		It("remains consistent", func() {
 			baseUrl := fmt.Sprintf("http://%s:%d", conf.ListenHost, conf.ListenPort)
 			policiesUrl := fmt.Sprintf("%s/networking/v1/external/policies", baseUrl)
@@ -141,7 +141,7 @@ var _ = Describe("External API Concurrency", func() {
 				Expect(responseString).To(MatchJSON("{}"))
 			}
 
-			nPolicies := 100
+			nPolicies := 1000
 			policies := []interface{}{}
 			for i := 0; i < nPolicies; i++ {
 				appName := fmt.Sprintf("some-app-%x", i)
