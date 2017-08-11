@@ -9,6 +9,7 @@ import (
 	"os"
 	"time"
 
+	"policy-server/adapter"
 	"policy-server/api"
 	"policy-server/api/api_v0_internal"
 	"policy-server/cmd/common"
@@ -117,7 +118,6 @@ func main() {
 	}
 
 	errorResponse := &httperror.ErrorResponse{
-		Logger:        logger,
 		MetricsSender: metricsSender,
 	}
 
@@ -131,6 +131,7 @@ func main() {
 
 	checkVersionWrapper := &handlers.CheckVersionWrapper{
 		ErrorResponse: errorResponse,
+		RataAdapter:   adapter.RataAdapter{},
 	}
 
 	metricsWrap := func(name string, handler http.Handler) http.Handler {

@@ -69,7 +69,7 @@ var _ = Describe("External API", func() {
 
 			Expect(resp.StatusCode).To(Equal(http.StatusUnauthorized))
 			responseString, err := ioutil.ReadAll(resp.Body)
-			Expect(responseString).To(MatchJSON(`{ "error": "authenticator: missing authorization header"}`))
+			Expect(responseString).To(MatchJSON(`{ "error": "missing authorization header"}`))
 		}
 
 		var TestBadBearerToken = func(req *http.Request) {
@@ -81,7 +81,7 @@ var _ = Describe("External API", func() {
 
 			Expect(resp.StatusCode).To(Equal(http.StatusForbidden))
 			responseString, err := ioutil.ReadAll(resp.Body)
-			Expect(responseString).To(MatchJSON(`{ "error": "authenticator: failed to verify token with uaa" }`))
+			Expect(responseString).To(MatchJSON(`{ "error": "failed to verify token with uaa" }`))
 		}
 
 		var _ = DescribeTable("all the routes",
