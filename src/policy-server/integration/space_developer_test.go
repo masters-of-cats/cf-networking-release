@@ -17,12 +17,12 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
-	"time"
 )
 
 var _ = Describe("External API Space Developer", func() {
 	var (
 		sessions          []*gexec.Session
+		innerSessions     []*gexec.Session
 		conf              config.Config
 		policyServerConfs []config.Config
 		dbConf            db.Config
@@ -34,8 +34,6 @@ var _ = Describe("External API Space Developer", func() {
 		fakeMetron = testsupport.NewFakeMetron()
 
 		dbConf = testsupport.GetDBConfig()
-		dbConf.DatabaseName = fmt.Sprintf("external_api_space_dev_test_node_%d", time.Now().UnixNano())
-		testsupport.CreateDatabase(dbConf)
 
 		template, _ := helpers.DefaultTestConfig(dbConf, fakeMetron.Address(), "fixtures")
 		policyServerConfs = configurePolicyServers(template, 2)
@@ -44,8 +42,7 @@ var _ = Describe("External API Space Developer", func() {
 	})
 
 	AfterEach(func() {
-		stopPolicyServers(sessions)
-		testsupport.RemoveDatabase(dbConf)
+		stopPolicyServers(sessions, policyServerConfs, nil)
 		Expect(fakeMetron.Close()).To(Succeed())
 	})
 
@@ -113,16 +110,23 @@ var _ = Describe("External API Space Developer", func() {
 
 			Context("when space developer self-service is enabled", func() {
 				BeforeEach(func() {
-					stopPolicyServers(sessions)
+					stopPolicyServers(sessions, policyServerConfs, nil)
 
 					template, _ := helpers.DefaultTestConfig(dbConf, fakeMetron.Address(), "fixtures")
 					template.EnableSpaceDeveloperSelfService = true
 					policyServerConfs = configurePolicyServers(template, 2)
-					sessions = startPolicyServers(policyServerConfs)
+
+					//if run in parallel sessions could update/override sessions in a different goroutine
+					innerSessions = startPolicyServers(policyServerConfs)
 					conf = policyServerConfs[0]
 
 					req = makeNewRequest("POST", "networking/v1/external/policies", body)
 					req.Header.Set("Authorization", "Bearer space-dev-token")
+				})
+
+				AfterEach(func() {
+					stopPolicyServers(innerSessions, policyServerConfs, nil)
+					Expect(fakeMetron.Close()).To(Succeed())
 				})
 
 				It("succeeds for developers with access to apps", func() {

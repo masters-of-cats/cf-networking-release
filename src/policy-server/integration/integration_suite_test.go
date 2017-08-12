@@ -77,6 +77,7 @@ func configurePolicyServers(template config.Config, instances int) []config.Conf
 	var configs []config.Config
 	for i := 0; i < instances; i++ {
 		conf := template
+		conf.Database.DatabaseName = fmt.Sprintf("test_node_%d", testsupport.PickAPort())
 		conf.ListenPort = testsupport.PickAPort()
 		conf.DebugServerPort = testsupport.PickAPort()
 		configs = append(configs, conf)
@@ -88,6 +89,7 @@ func configureInternalPolicyServers(template config.InternalConfig, instances in
 	var configs []config.InternalConfig
 	for i := 0; i < instances; i++ {
 		conf := template
+		conf.Database.DatabaseName = fmt.Sprintf("internal_test_node_%d", testsupport.PickAPort())
 		conf.InternalListenPort = testsupport.PickAPort()
 		conf.DebugServerPort = testsupport.PickAPort()
 		conf.HealthCheckPort = testsupport.PickAPort()
@@ -103,19 +105,29 @@ func startPolicyServers(configs []config.Config) []*gexec.Session {
 func startPolicyAndInternalServers(configs []config.Config, internalConfigs []config.InternalConfig) []*gexec.Session {
 	var sessions []*gexec.Session
 	for _, conf := range configs {
+		testsupport.CreateDatabase(conf.Database)
 		sessions = append(sessions, helpers.StartPolicyServer(policyServerPath, conf))
 	}
 
 	for _, conf := range internalConfigs {
+		testsupport.CreateDatabase(conf.Database)
 		sessions = append(sessions, helpers.StartInternalPolicyServer(policyServerInternalPath, conf))
 	}
 	return sessions
 }
 
-func stopPolicyServers(sessions []*gexec.Session) {
+func stopPolicyServers(sessions []*gexec.Session, configs []config.Config, internalConfigs []config.InternalConfig) {
 	for _, session := range sessions {
 		session.Interrupt()
 		Eventually(session, helpers.DEFAULT_TIMEOUT).Should(gexec.Exit())
+	}
+
+	for _, conf := range configs {
+		testsupport.RemoveDatabase(conf.Database)
+	}
+
+	for _, conf := range internalConfigs {
+		testsupport.RemoveDatabase(conf.Database)
 	}
 }
 
