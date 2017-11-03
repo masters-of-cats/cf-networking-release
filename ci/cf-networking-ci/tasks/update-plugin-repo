@@ -6,7 +6,7 @@ set -e -x
 export PATH=$GOPATH/bin:$PATH
 
 FORK=$PWD/cli-plugin-fork
-TEMPLATE_PATH=$PWD/cf-networking-release-ci/ci/opsfiles/cli-plugin-template.yml
+TEMPLATE_PATH=$PWD/cf-networking-release-ci/ci/cf-networking-ci/opsfiles/cli-plugin-template.yml
 RELEASE_PATH=$PWD/cf-networking-github-release
 export CFN_version=$(cat "$RELEASE_PATH"/version)
 export CFN_update_time=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
