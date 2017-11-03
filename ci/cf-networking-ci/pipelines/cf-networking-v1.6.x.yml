@@ -10,8 +10,11 @@ groups:
   - beanie-test
   - beanie-smoke
   - beanie-cats
+  - porkpie-deploy
+  - smoked-porkpie
   - ship-what
   - shipit
+  - merge-master
   - bump-patch-version
   - update-cli-plugin-repo
 - name: beanie
@@ -21,13 +24,23 @@ groups:
   - beanie-deploy
   - beanie-test
   - delete-beanie-deployment
+- name: porkpie
+  jobs:
+  - porkpie-bbl-up
+  - porkpie-bbl-destroy
+  - porkpie-deploy
+  - smoked-porkpie
+  - delete-porkpie-deployment
 - name: bbl
   jobs:
   - beanie-bbl-up
   - beanie-bbl-destroy
+  - porkpie-bbl-up
+  - porkpie-bbl-destroy
 - name: cleanup
   jobs:
   - delete-beanie-deployment
+  - delete-porkpie-deployment
 - name: version
   jobs:
   - major-bump
@@ -44,14 +57,14 @@ resources:
   - name: cli-plugin-master
     type: git
     source:
-      uri: "https://github.com/cloudfoundry-incubator/cli-plugin-repo.git"
+      uri: "https://github.com/cloudfoundry/cli-plugin-repo.git"
       branch: master
 
   ###### Control plane
   - name: cf-networking-release-ci
     type: git
     source:
-      uri: https://github.com/cloudfoundry-incubator/cf-networking-release
+      uri: https://github.com/cloudfoundry/cf-networking-release
       paths: [ ci ]
       branch: v1.6.x
   - name: cf-networking-deployments
@@ -76,19 +89,43 @@ resources:
       branch: master
       tag_filter: v0.24.0
       uri: https://github.com/cloudfoundry/cf-deployment.git
+  - name: cf-deployment-0.4.0
+    type: git
+    source:
+      branch: master
+      tag_filter: v0.4.0  # May 19
+      uri: https://github.com/cloudfoundry/cf-deployment.git
+
   ###### BOSH release repos
   - name: cf-networking-dev
     type: git
     source:
-      uri: git@github.com:cloudfoundry-incubator/cf-networking-release.git
+      uri: git@github.com:cloudfoundry/cf-networking-release.git
       branch: v1.6.x
       ignore_paths:
         - docs
       private_key: {{cf-networking-deploy-key}}
+
+  - name: cf-networking-dev-dev
+    type: git
+    source:
+      uri: git@github.com:cloudfoundry/cf-networking-release.git
+      branch: develop
+      private_key: {{cf-networking-deploy-key}}
+
+  - name: cf-networking-v0.25.x
+    type: git
+    source:
+      uri: git@github.com:cloudfoundry/cf-networking-release.git
+      branch: v0.25.x
+      ignore_paths:
+        - docs
+      private_key: {{cf-networking-deploy-key}}
+
   - name: cf-networking-master
     type: git
     source:
-      uri: git@github.com:cloudfoundry-incubator/cf-networking-release.git
+      uri: git@github.com:cloudfoundry/cf-networking-release.git
       branch: master
       private_key: {{cf-networking-deploy-key}}
 
@@ -120,7 +157,7 @@ resources:
   - name: cf-networking-github-release
     type: github-release
     source:
-      user: cloudfoundry-incubator
+      user: cloudfoundry
       repository: cf-networking-release
       access_token: {{github-access-token}}
 
@@ -183,6 +220,132 @@ jobs:
     - get: cf-networking-dev
       passed: [postgres-tests, mysql-tests, mysql-5.6-tests, windows-tests]
       trigger: true
+
+  - name: porkpie-bbl-up
+    serial_groups: [porkpie]
+    plan:
+    - aggregate:
+      - get: cf-deployment-concourse-tasks
+      - get: cf-networking-deployments
+    - task: bbl-up
+      file: cf-deployment-concourse-tasks/bbl-up/task.yml
+      params:
+        BBL_GCP_SERVICE_ACCOUNT_KEY: ../gcp/service-account.key.json
+        BBL_GCP_PROJECT_ID: cf-container-networking-gcp
+        BBL_GCP_REGION: us-east1
+        BBL_GCP_ZONE: us-east1-b
+        BBL_STATE_DIR: environments/porkpie/
+        BBL_IAAS: gcp
+        BBL_LB_CERT: {{porkpie-lb-cert}}
+        BBL_LB_KEY: {{porkpie-lb-key}}
+        LB_DOMAIN: porkpie.c2c.cf-app.com
+        BBL_ENV_NAME: porkpie
+      input_mapping:
+        bbl-state: cf-networking-deployments
+        ops-files: cf-networking-deployments
+      ensure:
+        put: cf-networking-deployments
+        params:
+          repository: updated-bbl-state
+          rebase: true
+
+  - name: porkpie-bbl-destroy
+    serial_groups: [porkpie]
+    plan:
+    - aggregate:
+      - get: cf-deployment-concourse-tasks
+      - get: cf-networking-deployments
+    - task: bbl-destroy
+      file: cf-deployment-concourse-tasks/bbl-destroy/task.yml
+      params:
+        BBL_STATE_DIR: environments/porkpie/
+      input_mapping:
+        bbl-state: cf-networking-deployments
+      ensure:
+        put: cf-networking-deployments
+        params:
+          repository: updated-bbl-state
+          rebase: true
+
+  - name: porkpie-deploy
+    serial_groups: [porkpie]
+    plan:
+    - aggregate:
+      - get: cf-networking-release-ci
+      - get: cf-deployment-concourse-tasks
+      - get: cf-networking-deployments
+      - get: cf-deployment-0.4.0
+        version: {ref: v0.4.0}
+      - get: cf-networking-v0.25.x
+        trigger: true
+      - get: cf-networking-dev
+        trigger: true
+        passed: [unit-and-integration-tests]
+    - task: upload-stemcell
+      file: cf-deployment-concourse-tasks/bosh-upload-stemcell-from-cf-deployment/task.yml
+      params:
+        BBL_STATE_DIR: environments/porkpie/
+      input_mapping:
+        bbl-state: cf-networking-deployments
+        cf-deployment: cf-deployment-0.4.0
+    - task: collect-ops-files
+      file: cf-networking-release-ci/ci/cf-networking-ci/tasks/collect-ops-files.yml
+      params:
+        ENVIRONMENT_NAME: porkpie
+      input_mapping:
+        cf-networking-release: cf-networking-v0.25.x
+        deployments-repo: cf-networking-deployments
+        cf-deployment: cf-deployment-0.4.0
+    - task: deploy-cf
+      file: cf-deployment-concourse-tasks/bosh-deploy-with-created-release/task.yml
+      params:
+        BBL_STATE_DIR: environments/porkpie/
+        SYSTEM_DOMAIN: porkpie.c2c.cf-app.com
+        OPS_FILES: gcp.yml use-3-azs-for-router.yml use-compiled-releases.yml bypass-cc-bridge.yml datadog.yml cf-networking.yml opsfile.yml
+        VARS_STORE_FILE: environments/porkpie/vars-store.yml
+      input_mapping:
+        bbl-state: cf-networking-deployments
+        release: cf-networking-v0.25.x
+        vars-files: cf-networking-deployments
+        vars-store: cf-networking-deployments
+        cf-deployment: cf-deployment-0.4.0
+      ensure:
+        put: cf-networking-deployments
+        params:
+          repository: updated-vars-store
+          rebase: true
+    - task: bosh-cleanup
+      file: cf-deployment-concourse-tasks/bosh-cleanup/task.yml
+      params:
+        BBL_STATE_DIR: environments/porkpie/
+        CLEAN_ALL: false
+      input_mapping:
+        bbl-state: cf-networking-deployments
+
+  - name: smoked-porkpie
+    serial_groups: [porkpie-test-group]
+    plan:
+    - aggregate:
+      - get: cf-networking-deployments
+      - get: cf-networking-dev
+        passed: [porkpie-deploy]
+        trigger: true
+      - get: cf-networking-v0.25.x
+      - get: cf-networking-release-ci
+      - get: cf-deployment-0.4.0
+        version: {ref: v0.4.0}
+        passed: [porkpie-deploy]
+        trigger: true
+    - task: smoke-tests
+      file: cf-networking-release-ci/ci/cf-networking-ci/tasks/smoke-tests.yml
+      params:
+        ENVIRONMENT_NAME: porkpie
+        ENVIRONMENT_TAG: porkpie.c2c.cf-app.com
+        DATADOG_API_KEY: {{datadog_api_key}}
+      input_mapping:
+        test-config: cf-networking-deployments
+        cf-networking: cf-networking-dev
+        cf-networking-tests: cf-networking-v0.25.x
 
   - name: beanie-bbl-up
     serial_groups: [beanie]
@@ -318,7 +481,6 @@ jobs:
       params:
         ENVIRONMENT_NAME: beanie
 
-
   - name: beanie-smoke
     serial_groups: [beanie-test-group]
     plan:
@@ -341,6 +503,7 @@ jobs:
       input_mapping:
         test-config: cf-networking-deployments
         cf-networking: cf-networking-dev
+        cf-networking-tests: cf-networking-dev
 
   - name: beanie-cats
     serial_groups: [beanie-test-group, beanie-deploy-group]
@@ -388,6 +551,20 @@ jobs:
       input_mapping:
         bbl-state: cf-networking-deployments
 
+  - name: delete-porkpie-deployment
+    public: true
+    serial_groups: [porkpie]
+    plan:
+    - aggregate:
+      - get: cf-networking-deployments
+      - get: cf-deployment-concourse-tasks
+    - task: delete-deployment
+      file: cf-deployment-concourse-tasks/bosh-delete-deployment/task.yml
+      params:
+        BBL_STATE_DIR: environments/porkpie/
+      input_mapping:
+        bbl-state: cf-networking-deployments
+
   - name: ship-what
     serial_groups: [version]
     plan:
@@ -398,7 +575,7 @@ jobs:
         - get: cf-networking-dev
           params:
             submodules: none
-          passed: [beanie-smoke]
+          passed: [beanie-smoke, smoked-porkpie]
           trigger: true
         - get: cf-deployment
           passed: [beanie-test]
@@ -478,18 +655,21 @@ jobs:
     plan:
     - do:
       - aggregate:
+        - get: version
+          passed: [shipit]
         - get: cf-networking-release-ci
         - get: cli-plugin-fork
         - get: cli-plugin-master
-        - get: cf-networking-github-release
-          params:
-            globs:
-            - network-policy-plugin-*
         - get: cf-networking-master
           params:  # just here for a dependency/trigger, so keep it light
             submodules: none
             depth: 1
           passed: [shipit]
+        - get: cf-networking-github-release
+          version: { tag: 'v1.6.1' }
+          params:
+            globs:
+            - network-policy-plugin-*
       - task: update-plugin-repo
         file: cf-networking-release-ci/ci/cf-networking-ci/tasks/update-plugin-repo.yml
       - put: cli-plugin-fork
@@ -500,6 +680,25 @@ jobs:
         file: cf-networking-release-ci/ci/cf-networking-ci/tasks/create-plugin-pr.yml
         params:
           GITHUB_TOKEN: {{github-access-token}}
+
+  # merge master back to develop
+  - name: merge-master
+    plan:
+    - do:
+      - aggregate:
+        - get: cf-networking-release-ci
+        - get: cf-networking-master
+          params:
+            submodules: none
+          passed: [shipit]
+          trigger: true
+        - get: cf-networking-dev-dev
+          params: {submodules: none}
+      - task: merge-master
+        file: cf-networking-release-ci/ci/cf-networking-ci/tasks/merge-master.yml
+      - put: cf-networking-dev-dev
+        params: {repository: release-merged}
+
 
   # versioning
   - name: patch-bump
