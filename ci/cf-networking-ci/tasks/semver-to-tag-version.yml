@@ -1,0 +1,15 @@
+---
+image_resource:
+  type: docker-image
+  source: { repository: c2cnetworking/deploy }
+
+platform: linux
+
+inputs:
+  - name: version
+
+outputs:
+  - name: tag_version
+
+run:
+  path: cf-networking-release-ci/ci/cf-networking-ci/tasks/semver-to-tag-version
