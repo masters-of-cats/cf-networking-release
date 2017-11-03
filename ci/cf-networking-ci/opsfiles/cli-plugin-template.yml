@@ -10,14 +10,14 @@
     company: Pivotal
     authors:
       - name: CF Networking Team
-    homepage: https://github.com/cloudfoundry-incubator/cf-networking-release
+    homepage: https://github.com/cloudfoundry/cf-networking-release
     binaries:
       - platform: osx
-        url: https://github.com/cloudfoundry-incubator/cf-networking-release/releases/download/v((version))/network-policy-plugin-darwin64
+        url: https://github.com/cloudfoundry/cf-networking-release/releases/download/v((version))/network-policy-plugin-darwin64
         checksum: ((osx_checksum))
       - platform: win64
-        url: https://github.com/cloudfoundry-incubator/cf-networking-release/releases/download/v((version))/network-policy-plugin-windows64.exe
+        url: https://github.com/cloudfoundry/cf-networking-release/releases/download/v((version))/network-policy-plugin-windows64.exe
         checksum: ((win64_checksum))
       - platform: linux64
-        url: https://github.com/cloudfoundry-incubator/cf-networking-release/releases/download/v((version))/network-policy-plugin-linux64
+        url: https://github.com/cloudfoundry/cf-networking-release/releases/download/v((version))/network-policy-plugin-linux64
         checksum: ((linux64_checksum))

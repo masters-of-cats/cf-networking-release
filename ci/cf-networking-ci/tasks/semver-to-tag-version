@@ -1,6 +1,0 @@
-#!/bin/bash
-
-set -eu
-
-version=$(cat version/number)
-echo "v${version}" > tag_version/number
