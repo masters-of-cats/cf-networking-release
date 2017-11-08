@@ -97,7 +97,7 @@ resources:
       uri: https://github.com/cloudfoundry/cf-deployment.git
 
   ###### BOSH release repos
-  - name: cf-networking-dev
+  - name: cf-networking-v1.6.x
     type: git
     source:
       uri: git@github.com:cloudfoundry/cf-networking-release.git
@@ -106,7 +106,7 @@ resources:
         - docs
       private_key: {{cf-networking-deploy-key}}
 
-  - name: cf-networking-dev-dev
+  - name: cf-networking-develop
     type: git
     source:
       uri: git@github.com:cloudfoundry/cf-networking-release.git
@@ -166,58 +166,58 @@ jobs:
     public: true
     plan:
     - aggregate:
-      - get: cf-networking-dev
+      - get: cf-networking-v1.6.x
         trigger: true
       - get: cf-networking-release-ci
     - task: unit-and-integration-tests
       file: cf-networking-release-ci/ci/cf-networking-ci/tasks/postgres-tests.yml
       privileged: true
       input_mapping:
-        cf-networking-release: cf-networking-dev
+        cf-networking-release: cf-networking-v1.6.x
 
   - name: mysql-tests
     public: true
     plan:
     - aggregate:
-      - get: cf-networking-dev
+      - get: cf-networking-v1.6.x
         trigger: true
       - get: cf-networking-release-ci
     - task: unit-and-integration-tests
       file: cf-networking-release-ci/ci/cf-networking-ci/tasks/mysql-tests.yml
       privileged: true
       input_mapping:
-        cf-networking-release: cf-networking-dev
+        cf-networking-release: cf-networking-v1.6.x
 
   - name: mysql-5.6-tests
     public: true
     plan:
     - aggregate:
-      - get: cf-networking-dev
+      - get: cf-networking-v1.6.x
         trigger: true
       - get: cf-networking-release-ci
     - task: unit-and-integration-tests
       file: cf-networking-release-ci/ci/cf-networking-ci/tasks/mysql-5.6-tests.yml
       privileged: true
       input_mapping:
-        cf-networking-release: cf-networking-dev
+        cf-networking-release: cf-networking-v1.6.x
 
   - name: windows-tests
     public: true
     plan:
     - aggregate:
-      - get: cf-networking-dev
+      - get: cf-networking-v1.6.x
         trigger: true
       - get: cf-networking-release-ci
     - task: garden-external-networker-windows
       file: cf-networking-release-ci/ci/cf-networking-ci/tasks/garden-external-networker-windows.yml
       input_mapping:
-        cf-networking-release: cf-networking-dev
+        cf-networking-release: cf-networking-v1.6.x
         ci: cf-networking-release-ci
 
   - name: unit-and-integration-tests
     public: true
     plan:
-    - get: cf-networking-dev
+    - get: cf-networking-v1.6.x
       passed: [postgres-tests, mysql-tests, mysql-5.6-tests, windows-tests]
       trigger: true
 
@@ -278,7 +278,7 @@ jobs:
         version: {ref: v0.4.0}
       - get: cf-networking-v0.25.x
         trigger: true
-      - get: cf-networking-dev
+      - get: cf-networking-v1.6.x
         trigger: true
         passed: [unit-and-integration-tests]
     - task: upload-stemcell
@@ -327,7 +327,7 @@ jobs:
     plan:
     - aggregate:
       - get: cf-networking-deployments
-      - get: cf-networking-dev
+      - get: cf-networking-v1.6.x
         passed: [porkpie-deploy]
         trigger: true
       - get: cf-networking-v0.25.x
@@ -344,7 +344,7 @@ jobs:
         DATADOG_API_KEY: {{datadog_api_key}}
       input_mapping:
         test-config: cf-networking-deployments
-        cf-networking: cf-networking-dev
+        cf-networking: cf-networking-v1.6.x
         cf-networking-tests: cf-networking-v0.25.x
 
   - name: beanie-bbl-up
@@ -403,7 +403,7 @@ jobs:
       - get: cf-deployment
         trigger: true
         version: {ref: v0.24.0}
-      - get: cf-networking-dev
+      - get: cf-networking-v1.6.x
         trigger: true
         passed: [unit-and-integration-tests]
       - get: version
@@ -420,7 +420,7 @@ jobs:
       params:
         ENVIRONMENT_NAME: beanie
       input_mapping:
-        cf-networking-release: cf-networking-dev
+        cf-networking-release: cf-networking-v1.6.x
         deployments-repo: cf-networking-deployments
     - task: deploy-cf
       file: cf-deployment-concourse-tasks/bosh-deploy-with-created-release/task.yml
@@ -431,7 +431,7 @@ jobs:
         VARS_STORE_FILE: environments/beanie/vars-store.yml
       input_mapping:
         bbl-state: cf-networking-deployments
-        release: cf-networking-dev
+        release: cf-networking-v1.6.x
         vars-files: cf-networking-deployments
         vars-store: cf-networking-deployments
       ensure:
@@ -442,7 +442,7 @@ jobs:
     - task: create-release-tarball
       file: cf-networking-release-ci/ci/cf-networking-ci/tasks/create-release-tarball.yml
       input_mapping:
-        cf-networking: cf-networking-dev
+        cf-networking: cf-networking-v1.6.x
     - put: cf-networking-tarball
       params:
         file: tarballs/cf-networking-*.tgz
@@ -469,13 +469,13 @@ jobs:
       - get: cf-deployment
         passed: [beanie-deploy]
         version: {ref: v0.24.0}
-      - get: cf-networking-dev
+      - get: cf-networking-v1.6.x
         passed: [beanie-deploy]
         trigger: true
     - task: acceptance-tests
       file: cf-networking-release-ci/ci/cf-networking-ci/tasks/acceptance-tests.yml
       input_mapping:
-        cf-networking: cf-networking-dev
+        cf-networking: cf-networking-v1.6.x
         test-config: cf-networking-deployments
         vars-store: cf-networking-deployments
       params:
@@ -486,7 +486,7 @@ jobs:
     plan:
     - aggregate:
       - get: cf-networking-deployments
-      - get: cf-networking-dev
+      - get: cf-networking-v1.6.x
         passed: [beanie-test]
         trigger: true
       - get: cf-networking-release-ci
@@ -502,8 +502,8 @@ jobs:
         DATADOG_API_KEY: {{datadog_api_key}}
       input_mapping:
         test-config: cf-networking-deployments
-        cf-networking: cf-networking-dev
-        cf-networking-tests: cf-networking-dev
+        cf-networking: cf-networking-v1.6.x
+        cf-networking-tests: cf-networking-v1.6.x
 
   - name: beanie-cats
     serial_groups: [beanie-test-group, beanie-deploy-group]
@@ -512,7 +512,7 @@ jobs:
       - get: cf-networking-release-ci
       - get: cf-acceptance-tests
       - get: cats-concourse-task
-      - get: cf-networking-dev
+      - get: cf-networking-v1.6.x
         passed: [beanie-test]
         trigger: true
       - get: cf-deployment
@@ -531,7 +531,7 @@ jobs:
     - task: cats
       file: cats-concourse-task/task.yml
       input_mapping:
-        cf-networking-release: cf-networking-dev
+        cf-networking-release: cf-networking-v1.6.x
       params:
         NODES: 8
 
@@ -572,7 +572,7 @@ jobs:
       - aggregate:
         - get: version
           passed: [beanie-test]
-        - get: cf-networking-dev
+        - get: cf-networking-v1.6.x
           params:
             submodules: none
           passed: [beanie-smoke, smoked-porkpie]
@@ -597,7 +597,7 @@ jobs:
         - get: cf-networking-master
           params:
             submodules: none
-        - get: cf-networking-dev
+        - get: cf-networking-v1.6.x
           params:
             submodules: none
           passed: [ship-what]
@@ -611,11 +611,11 @@ jobs:
       - task: shipit
         file: cf-networking-release-ci/ci/cf-networking-ci/tasks/shipit.yml
         input_mapping:
-          cf-networking: cf-networking-dev
+          cf-networking: cf-networking-v1.6.x
       - task: build-cli
         file: cf-networking-release-ci/ci/cf-networking-ci/tasks/build-cli.yml
         input_mapping:
-          cf-networking: cf-networking-dev
+          cf-networking: cf-networking-v1.6.x
       - put: version
         params: {file: version/number}
       - put: cf-networking-master
@@ -692,11 +692,11 @@ jobs:
             submodules: none
           passed: [shipit]
           trigger: true
-        - get: cf-networking-dev-dev
+        - get: cf-networking-develop
           params: {submodules: none}
       - task: merge-master
         file: cf-networking-release-ci/ci/cf-networking-ci/tasks/merge-master.yml
-      - put: cf-networking-dev-dev
+      - put: cf-networking-develop
         params: {repository: release-merged}
 
 
