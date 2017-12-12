@@ -573,9 +573,12 @@ jobs:
         file: cf-networking-ci/ci/tasks/shipit.yml
       - put: version
         params: {file: version/number}
-      - put: cf-networking-v0.25.x
+      - put: cf-networking-master
         params:
           repository: release/master
+      - put: cf-networking-v0.25.x
+        params:
+          repository: cf-networking-v0.25.x
           tag: version/number
           tag_prefix: v
       - put: cf-networking-tarball
@@ -591,7 +594,6 @@ jobs:
           tag_prefix: v
           globs:
           - final-release/cf-networking-*.tgz
-          - binaries/network-policy-plugin-*
 
   # bump minor version (i.e. 0.1.0 -> 0.2.0)
   - name: bump-patch-version
