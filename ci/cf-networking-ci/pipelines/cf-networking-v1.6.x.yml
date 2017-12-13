@@ -621,6 +621,10 @@ jobs:
       - put: cf-networking-master
         params:
           repository: release/master
+      - put: cf-networking-v1.6.x
+        params:
+          only_tag: true
+          repository: cf-networking-v1.6.x
           tag: version/number
           tag_prefix: v
       - put: cf-networking-tarball
