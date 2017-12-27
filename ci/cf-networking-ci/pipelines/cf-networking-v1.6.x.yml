@@ -1,3 +1,6 @@
+pinned-versions: &cf-deployment-concourse-task-version
+  ref: 4156e1fbdf62ae6636146b671334ef10e76e0b0e
+
 groups:
 - name: cf-networking-v1.6.x
   jobs:
@@ -226,11 +229,12 @@ jobs:
     plan:
     - aggregate:
       - get: cf-deployment-concourse-tasks
+        version: *cf-deployment-concourse-task-version
       - get: cf-networking-deployments
     - task: bbl-up
       file: cf-deployment-concourse-tasks/bbl-up/task.yml
       params:
-        BBL_GCP_SERVICE_ACCOUNT_KEY: ../gcp/service-account.key.json
+        BBL_GCP_SERVICE_ACCOUNT_KEY: environments/gcp/service-account.key.json
         BBL_GCP_REGION: us-east1
         BBL_STATE_DIR: environments/porkpie/
         BBL_IAAS: gcp
@@ -239,12 +243,12 @@ jobs:
         LB_DOMAIN: porkpie.c2c.cf-app.com
         BBL_ENV_NAME: porkpie
       input_mapping:
-        bbl-state: cf-networking-deployments
+        env-repo: cf-networking-deployments
         ops-files: cf-networking-deployments
       ensure:
         put: cf-networking-deployments
         params:
-          repository: updated-bbl-state
+          repository: updated-env-repo
           rebase: true
 
   - name: porkpie-bbl-destroy
@@ -252,18 +256,19 @@ jobs:
     plan:
     - aggregate:
       - get: cf-deployment-concourse-tasks
+        version: *cf-deployment-concourse-task-version
       - get: cf-networking-deployments
     - task: bbl-destroy
       file: cf-deployment-concourse-tasks/bbl-destroy/task.yml
       params:
         BBL_STATE_DIR: environments/porkpie/
-        BBL_GCP_SERVICE_ACCOUNT_KEY: ../gcp/service-account.key.json
+        BBL_GCP_SERVICE_ACCOUNT_KEY: environments/gcp/service-account.key.json
       input_mapping:
-        bbl-state: cf-networking-deployments
+        env-repo: cf-networking-deployments
       ensure:
         put: cf-networking-deployments
         params:
-          repository: updated-bbl-state
+          repository: updated-env-repo
           rebase: true
 
   - name: porkpie-deploy
@@ -272,6 +277,7 @@ jobs:
     - aggregate:
       - get: cf-networking-release-ci
       - get: cf-deployment-concourse-tasks
+        version: *cf-deployment-concourse-task-version
       - get: cf-networking-deployments
       - get: cf-deployment-0.4.0
         version: {ref: v0.4.0}
@@ -285,7 +291,7 @@ jobs:
       params:
         BBL_STATE_DIR: environments/porkpie/
       input_mapping:
-        bbl-state: cf-networking-deployments
+        env-repo: cf-networking-deployments
         cf-deployment: cf-deployment-0.4.0
     - task: collect-ops-files
       file: cf-networking-release-ci/ci/cf-networking-ci/tasks/collect-ops-files.yml
@@ -303,7 +309,7 @@ jobs:
         OPS_FILES: gcp.yml use-3-azs-for-router.yml use-compiled-releases.yml bypass-cc-bridge.yml datadog.yml cf-networking.yml opsfile.yml
         VARS_STORE_FILE: environments/porkpie/vars-store.yml
       input_mapping:
-        bbl-state: cf-networking-deployments
+        env-repo: cf-networking-deployments
         release: cf-networking-v0.25.x
         vars-files: cf-networking-deployments
         vars-store: cf-networking-deployments
@@ -319,7 +325,7 @@ jobs:
         BBL_STATE_DIR: environments/porkpie/
         CLEAN_ALL: false
       input_mapping:
-        bbl-state: cf-networking-deployments
+        env-repo: cf-networking-deployments
 
   - name: smoked-porkpie
     serial_groups: [porkpie-test-group]
@@ -351,11 +357,12 @@ jobs:
     plan:
     - aggregate:
       - get: cf-deployment-concourse-tasks
+        version: *cf-deployment-concourse-task-version
       - get: cf-networking-deployments
     - task: bbl-up
       file: cf-deployment-concourse-tasks/bbl-up/task.yml
       params:
-        BBL_GCP_SERVICE_ACCOUNT_KEY: ../gcp/service-account.key.json
+        BBL_GCP_SERVICE_ACCOUNT_KEY: environments/gcp/service-account.key.json
         BBL_GCP_REGION: us-east1
         BBL_STATE_DIR: environments/beanie/
         BBL_IAAS: gcp
@@ -364,12 +371,12 @@ jobs:
         LB_DOMAIN: beanie.c2c.cf-app.com
         BBL_ENV_NAME: beanie
       input_mapping:
-        bbl-state: cf-networking-deployments
+        env-repo: cf-networking-deployments
         ops-files: cf-networking-deployments
       ensure:
         put: cf-networking-deployments
         params:
-          repository: updated-bbl-state
+          repository: updated-env-repo
           rebase: true
 
   - name: beanie-bbl-destroy
@@ -377,18 +384,19 @@ jobs:
     plan:
     - aggregate:
       - get: cf-deployment-concourse-tasks
+        version: *cf-deployment-concourse-task-version
       - get: cf-networking-deployments
     - task: bbl-destroy
       file: cf-deployment-concourse-tasks/bbl-destroy/task.yml
       params:
         BBL_STATE_DIR: environments/beanie/
-        BBL_GCP_SERVICE_ACCOUNT_KEY: ../gcp/service-account.key.json
+        BBL_GCP_SERVICE_ACCOUNT_KEY: environments/gcp/service-account.key.json
       input_mapping:
-        bbl-state: cf-networking-deployments
+        env-repo: cf-networking-deployments
       ensure:
         put: cf-networking-deployments
         params:
-          repository: updated-bbl-state
+          repository: updated-env-repo
           rebase: true
 
   - name: beanie-deploy
@@ -397,6 +405,7 @@ jobs:
     - aggregate:
       - get: cf-networking-release-ci
       - get: cf-deployment-concourse-tasks
+        version: *cf-deployment-concourse-task-version
       - get: cf-networking-deployments
       - get: cf-deployment
         trigger: true
@@ -412,7 +421,7 @@ jobs:
       params:
         BBL_STATE_DIR: environments/beanie/
       input_mapping:
-        bbl-state: cf-networking-deployments
+        env-repo: cf-networking-deployments
     - task: collect-ops-files
       file: cf-networking-release-ci/ci/cf-networking-ci/tasks/collect-ops-files.yml
       params:
@@ -428,7 +437,7 @@ jobs:
         OPS_FILES: gcp.yml use-3-azs-for-router.yml use-compiled-releases.yml bypass-cc-bridge.yml datadog.yml cf-networking.yml opsfile.yml
         VARS_STORE_FILE: environments/beanie/vars-store.yml
       input_mapping:
-        bbl-state: cf-networking-deployments
+        env-repo: cf-networking-deployments
         release: cf-networking-v1.6.x
         vars-files: cf-networking-deployments
         vars-store: cf-networking-deployments
@@ -452,7 +461,7 @@ jobs:
         BBL_STATE_DIR: environments/beanie/
         CLEAN_ALL: false
       input_mapping:
-        bbl-state: cf-networking-deployments
+        env-repo: cf-networking-deployments
 
   - name: beanie-test
     serial_groups: [beanie]
@@ -542,12 +551,13 @@ jobs:
     - aggregate:
       - get: cf-networking-deployments
       - get: cf-deployment-concourse-tasks
+        version: *cf-deployment-concourse-task-version
     - task: delete-deployment
       file: cf-deployment-concourse-tasks/bosh-delete-deployment/task.yml
       params:
         BBL_STATE_DIR: environments/beanie/
       input_mapping:
-        bbl-state: cf-networking-deployments
+        env-repo: cf-networking-deployments
 
   - name: delete-porkpie-deployment
     public: true
@@ -556,12 +566,13 @@ jobs:
     - aggregate:
       - get: cf-networking-deployments
       - get: cf-deployment-concourse-tasks
+        version: *cf-deployment-concourse-task-version
     - task: delete-deployment
       file: cf-deployment-concourse-tasks/bosh-delete-deployment/task.yml
       params:
         BBL_STATE_DIR: environments/porkpie/
       input_mapping:
-        bbl-state: cf-networking-deployments
+        env-repo: cf-networking-deployments
 
   - name: ship-what
     serial_groups: [version]
