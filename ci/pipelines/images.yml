@@ -126,6 +126,17 @@ resources:
     paths:
       - ci
 
+- name: deploy-light-image-version
+  type: semver
+  source:
+    driver: s3
+    region_name: us-west-2
+    bucket: docker-image-versions
+    key: light-image/version
+    access_key_id: {{aws-access-key-id}}
+    secret_access_key: {{aws-secret-access-key}}
+    initial_version: 0.0.1
+
 jobs:
 - name: build-dev-postgres-image
   plan:
@@ -227,8 +238,18 @@ jobs:
 
 - name: build-deploy-light-image
   plan:
+  - get: deploy-light-image-version
+    params: {bump: minor}
   - get: deploy-light-dockerfile
     trigger: true
-  - put: deploy-light-image
+  - task: set-docker-image-tag
+    file: cf-networking-release-ci/ci/tasks/set-docker-image-tag.yml
+    input_mapping:
+      dockerfile: dev-postgres-ifb-dockerfile
     params:
-      build: deploy-light-dockerfile/ci/dockerfiles/deploy-light
+      TAG: deploy-light-image-version
+  - put: deploy-light-image-version
+    params: {file: docker-version/version}
+  # - put: deploy-light-image
+  #   params:
+  #     build: deploy-light-dockerfile/ci/dockerfiles/deploy-light
