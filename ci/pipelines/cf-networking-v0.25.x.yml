@@ -212,6 +212,12 @@ jobs:
     - aggregate:
       - get: cf-deployment-concourse-tasks
       - get: cf-networking-deployments
+    - task: bosh-cleanup
+      file: cf-deployment-concourse-tasks/bosh-cleanup/task.yml
+      params:
+        BBL_STATE_DIR: environments/panama/
+      input_mapping:
+        env-repo: cf-networking-deployments
     - task: bbl-destroy
       file: cf-deployment-concourse-tasks/bbl-destroy/task.yml
       params:
@@ -330,6 +336,12 @@ jobs:
     - aggregate:
       - get: cf-deployment-concourse-tasks
       - get: cf-networking-deployments
+    - task: bosh-cleanup
+      file: cf-deployment-concourse-tasks/bosh-cleanup/task.yml
+      params:
+        BBL_STATE_DIR: environments/kofia/
+      input_mapping:
+        env-repo: cf-networking-deployments
     - task: bbl-destroy
       file: cf-deployment-concourse-tasks/bbl-destroy/task.yml
       params:
