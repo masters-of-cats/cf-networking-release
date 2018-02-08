@@ -133,6 +133,3 @@
 [submodule "src/code.cloudfoundry.org/cf-networking-helpers"]
 	path = src/code.cloudfoundry.org/cf-networking-helpers
 	url = https://github.com/cloudfoundry/cf-networking-helpers
-[submodule "src/code.cloudfoundry.org/silk"]
-	path = src/code.cloudfoundry.org/silk
-	url = https://github.com/cloudfoundry/silk
