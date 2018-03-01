@@ -16,39 +16,88 @@ Cloud Foundry requires the networking stack to perform certain additional functi
 
 0. Enforce Container to Container Network Policies that have been configured in the [Policy Server API](API.md)
 
-Configuration for (1) and (2) is passed down via the semi-standardized `runtimeConfig` field described in the [CNI conventions document](https://github.com/containernetworking/cni/blob/master/CONVENTIONS.md).  See [What data will my CNI plugin receive](#what-data-will-my-cni-plugin-receive) below.
+Configuration for (0) and (1) is passed down via the semi-standardized `runtimeConfig` field described in the [CNI conventions document](https://github.com/containernetworking/cni/blob/master/CONVENTIONS.md).  See [What data will my CNI plugin receive](#what-data-will-my-cni-plugin-receive) below.
 
-Configuration for (3) is available via the [Policy Server Internal API](#policy-server-internal-api). 3rd party integrators should expect this component will be present in a standard CF deploy.
+Configuration for (2) is available via the [Policy Server Internal API](#policy-server-internal-api). 3rd party integrators should expect this component will be present in a standard CF deploy.
 
 ## Architecture
 
 ## Mandatory features
 
-### Operators can configure ASGs at the CF or space level to allow traffic from apps/tasks to CIDR ranges 
-Description: Networking layer provides IP addressing and connectivity for containers.
-CF Information needed: ASG info from the config passed in from the garden external networker. For example, the cni-wrapper-plugin in silk-release[link to config passed in to cni-wrapper-plugin further in the doc here] - See `runtimeConfig.netOutRules`. If need non-applied asgs poll capi [link here].
+In addition to the features listed in the [CNI spec](), the following features are required.
 
-### External entities can reach applications through the GoRouter
-Description: Networking layer sets up firewall rules to allow ingress traffic from GoRouter, TCP router and SSH proxy.For example, the cni-wrapper-plugin insilk-release[link to config passed in to cni-wrapper-plugin further in the doc here] - See `runtimeConfig.portMappings`
+- NetOut
+- NetIn
+- Policy configuration
+- MTU
+- Bosh DNS
+- Your CNI plugin is a bosh release
 
-In order for the GoRouter, TCP router, and SSH proxy to be able to access your app, ports need to be configured.
+### NetOut
+**Spec**: Operators can configure ASGs at the CF or space level to allow traffic from apps and tasks to CIDR ranges.
 
-### App-to-app policies between app containers and task containers for those apps
+**Description**: Networking layer provides IP addressing and connectivity for containers. The networking layer sets up firewall rules to allow traffic based on ASG configuration.
 
-You need to have an agent running that is polling the internal policy server. For exmple, VXLAN Policy Agent. [Link to how to poll the internal policy server].
+**CF Information Needed**: ASG information can be pulled from the config passed in from the garden external networker. See [`runtimeConfig.netOutRules`](). The ASG information provided there will only be for the ASGs that are currently applied to the app. If you want information about new ASGs has been added through Cloud Controller, but that haven't been passed through on the config because the app has not been restarted, you can [poll CAPI]().
 
+### NetIn
+**Spec**: External entities can reach applications through the GoRouter.
+
+**Description**: Networking layer sets up firewall rules to allow ingress traffic from GoRouter, TCP router and SSH proxy. 
+
+**CF Information Needed**: In order for the GoRouter, TCP router, and SSH proxy to be able to access your app, ports listed in `portMappings` need to be configured. For example, the cni-wrapper-plugin insilk-release[link to config passed in to cni-wrapper-plugin further in the doc here] - See `runtimeConfig.portMappings`
+
+### Policy Confirguration
+**Spec**: App-to-app policies between app containers and task containers for those apps
+**Description**: The networking layer sets up firewall rules to allow container-to-container traffic based on policy  (v1 of policy API must be supported). 
+
+**CF Information Needed**: You need to have an agent running that is polling the internal policy server. [Link to how to poll the internal policy server]. For exmple, VXLAN Policy Agent. 
 
 ### MTU
-CNI plugins should automatically detect the MTU settings on the host, and set the MTU
+
+**Spec**: operatros can override the MTU on the interface
+
+**Description**: CNI plugins should automatically detect the MTU settings on the host, and set the MTU
 on container network interfaces appropriately.  For example, if the host MTU is 1500 bytes
 and the plugin encapsulates with 50 bytes of header, the plugin should ensure that the
 container MTU is no greater than 1450 bytes.  This is to ensure there is no fragmentation.
 The built-in silk CNI plugin does this.
 
 Operators may wish to override the MTU setting. In this case they will set the BOSH property [cf_networking.mtu](http://bosh.io/jobs/cni?source=github.com/cloudfoundry/cf-networking-release#p=cf_networking.mtu).
-3rd party plugins should respect this value. This value will be included in the config object that is passed to the configured CNI plugin.
+3rd party plugins should respect this value. 
 
-###
+**CF Information Needed**: This value will be included in the config object that is passed to the configured [CNI plugin](TODO).
+
+### Bosh DNS
+**Spec**: Apps can connect to services using [Bosh DNS](TODO). 
+**Description**: The networking layer allows containers to reach Bosh DNS on the cell at `169.254.0.2`. The CNI plugin returns the bosh DNS address as `169.254.0.2`.
+### Your CNI plugin is a bosh release
+
+#### To author a BOSH release with your plugin
+
+Your CNI plugin will need to be packaged as a [BOSH release](http://bosh.io/docs#release). 
+
+Add in all packages and jobs required by your CNI plugin.  At a minimum, you must provide a CNI binary program and a CNI config file.
+   If your software requires a long-lived daemon to run on the diego cell, we recommend you deploy a separate BOSH job for that.
+  - For more info on **bosh packaging scripts** read [this](http://bosh.io/docs/packages.html#create-a-packaging-script).
+  - For more info on **bosh jobs** read [this](http://bosh.io/docs/jobs.html).
+
+Use the [silk-release](http://github.com/cloudfoundry/silk-release) as inspiration.
+
+#### To deploy your BOSH release with Cloud Foundry
+
+Update the [deployment manifest properties](http://bosh.io/docs/deployment-manifest.html#properties)
+    - The garden cni job properties must be configured to point to your plugin's paths.  
+
+  ```yaml
+  properties:
+    cf_networking:
+      cni_plugin_dir: /var/vcap/packages/YOUR_PACKAGE/bin # directory for CNI binaries
+      cni_config_dir: /var/vcap/jobs/YOUR_JOB/config/cni  # directory for CNI config file(s)
+  ```
+The above properties are configured on the garden-cni job: [`cni_config_dir`](http://bosh.io/jobs/garden-cni?source=github.com/cloudfoundry/cf-networking-release#p=cf_networking.cni_config_dir) and [`cni_plugin_dir`](http://bosh.io/jobs/garden-cni?source=github.com/cloudfoundry/cf-networking-release#p=cf_networking.cni_plugin_dir)
+
+-- TODO: Is this yaml too mysterious?
 
 ## Optional capabilities
 
@@ -371,33 +420,7 @@ https://policy-server.service.cf.internal:4003/networking/v1/internal/policies?i
 
 
 
-## Deploying your plugin 
 
-### To author a BOSH release with your plugin
-
-Your CNI plugin will need to be packaged as a [BOSH release](http://bosh.io/docs#release). 
-
-Add in all packages and jobs required by your CNI plugin.  At a minimum, you must provide a CNI binary program and a CNI config file.
-   If your software requires a long-lived daemon to run on the diego cell, we recommend you deploy a separate BOSH job for that.
-  - For more info on **bosh packaging scripts** read [this](http://bosh.io/docs/packages.html#create-a-packaging-script).
-  - For more info on **bosh jobs** read [this](http://bosh.io/docs/jobs.html).
-
-Use the [silk-release](http://github.com/cloudfoundry/silk-release) as inspiration.
-
-### To deploy your BOSH release with Cloud Foundry
-
-Update the [deployment manifest properties](http://bosh.io/docs/deployment-manifest.html#properties)
-    - The garden cni job properties must be configured to point to your plugin's paths.  
-
-  ```yaml
-  properties:
-    cf_networking:
-      cni_plugin_dir: /var/vcap/packages/YOUR_PACKAGE/bin # directory for CNI binaries
-      cni_config_dir: /var/vcap/jobs/YOUR_JOB/config/cni  # directory for CNI config file(s)
-  ```
-The above properties are configured on the garden-cni job: [`cni_config_dir`](http://bosh.io/jobs/garden-cni?source=github.com/cloudfoundry/cf-networking-release#p=cf_networking.cni_config_dir) and [`cni_plugin_dir`](http://bosh.io/jobs/garden-cni?source=github.com/cloudfoundry/cf-networking-release#p=cf_networking.cni_plugin_dir)
-
--- TODO: Is this yaml too mysterious?
 
 ## Tests
 
