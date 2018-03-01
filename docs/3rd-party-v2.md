@@ -49,6 +49,7 @@ In addition to the features listed in the [CNI spec](), the following features a
 
 ### Policy Confirguration
 **Spec**: App-to-app policies between app containers and task containers for those apps
+
 **Description**: The networking layer sets up firewall rules to allow container-to-container traffic based on policy  (v1 of policy API must be supported). 
 
 **CF Information Needed**: You need to have an agent running that is polling the internal policy server. [Link to how to poll the internal policy server]. For exmple, VXLAN Policy Agent. 
@@ -70,7 +71,9 @@ Operators may wish to override the MTU setting. In this case they will set the B
 
 ### Bosh DNS
 **Spec**: Apps can connect to services using [Bosh DNS](TODO). 
+
 **Description**: The networking layer allows containers to reach Bosh DNS on the cell at `169.254.0.2`. The CNI plugin returns the bosh DNS address as `169.254.0.2`.
+
 ### Your CNI plugin is a bosh release
 
 #### To author a BOSH release with your plugin
@@ -100,6 +103,31 @@ The above properties are configured on the garden-cni job: [`cni_config_dir`](ht
 -- TODO: Is this yaml too mysterious?
 
 ## Optional capabilities
+The following features are optional for your CNI plugin:
+- Per ASG logging
+- Global ASG and container-to-container logging
+- Bosh backup and restore (BBR)
+
+### Per ASG Logging
+**Spec**: Operaters can configure `log: true` in ASG config.
+
+**Description**: The networking layer logs all accepted/denied packets for the ASG with `log: true` set.
+
+**CF Information Needed**: ASG information can be pulled from the config passed in from the garden external networker. See [`runtimeConfig.netOutRules`](). 
+
+### Global ASG and Container-to-Container Logging
+**Spec**: Operators can enable global logging in PAS tile
+
+**Description**: The networking later logs all accepted/denied ASG and container-to-container packets. 
+
+**CF Information Needed**: ASG information can be pulled from the config passed in from the garden external networker. See [`runtimeConfig.netOutRules`](). TODO: where can this flag be found? 
+
+### Bosh Backup and Restore (BBR)
+**Spec**: Operators can backup and restore Bosh deployments
+
+**Description**: Add support for BBR scripts if there is data that must be retained after a backup and restore operation. 
+
+**CF Information Needed**: ?? TODO
 
 ## Getting Data from CF
 ### From Environtment Variables
