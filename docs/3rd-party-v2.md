@@ -1,14 +1,11 @@
 # 3rd Party Plugin Development for Container Networking
 
+## Introduction
+
 *If you want to integrate your own CNI plugin with Cloud Foundry, begin by reviewing the component diagrams on the [architecture page](arch.md). Note that your plugin would replace the components in red, and take on the responsibilities of these components.*
 
 A CNI plugin is required to implement [this set of features](https://docs.google.com/spreadsheets/d/1Qdbod6a_25BoHGtCyQ2PFWheKhYR9OWFJrSaRLBNvqI). Associated tests suites are given to confirm the plugin implementation is correct. 
 
-COMMON GOTCHA: If you want to integrate using the default values for the [`cni_config_dir`](http://bosh.io/jobs/garden-cni?source=github.com/cloudfoundry/cf-networking-release#p=cf_networking.cni_config_dir) and [`cni_plugin_dir`](http://bosh.io/jobs/garden-cni?source=github.com/cloudfoundry/cf-networking-release#p=cf_networking.cni_plugin_dir), your BOSH package for the CNI plugin *must* be named `cni` and the BOSH job for the CNI plugin *must* be named `cni`.
-
-If you have any questions or feedback, please visit the `#container-networking` channel on [Cloud Foundry Slack](http://slack.cloudfoundry.org/).
-
-## Introduction
 Basic network connectivity is configured according to the [CNI specification](https://github.com/containernetworking/cni/blob/master/SPEC.md).
 
 Cloud Foundry requires the networking stack to perform certain additional functions which are currently not standardized by CNI.  These are:
@@ -23,22 +20,25 @@ Configuration for (1) and (2) is passed down via the semi-standardized `runtimeC
 
 Configuration for (3) is available via the [Policy Server Internal API](#policy-server-internal-api). 3rd party integrators should expect this component will be present in a standard CF deploy.
 
-## Test suites
-A Cloud Foundry system that integrates a 3rd party networking component should be able to pass the following test suites:
+## Architecture
 
-- [CF Networking Smoke Tests](../src/test/smoke)
-- [CF Networking Acceptance Tests](../src/test/acceptance)
-- [CF Acceptance Tests (CATs)](https://github.com/cloudfoundry/cf-acceptance-tests/)
-- [CF Routing Acceptance Tests (RATS)](https://github.com/cloudfoundry-incubator/routing-acceptance-tests)
-- Optional - [CF Disaster Recovery Acceptance Tests (DRATS)](https://github.com/cloudfoundry-incubator/disaster-recovery-acceptance-tests)
+## Mandatory features
 
-Only the `CF Networking Smoke Tests` are non-disruptive and may be run against a live, production environment.  The other tests make potentially disruptive changes and should only be run against a non-production environment.
+### Operators can configure ASGs at the CF or space level to allow traffic from apps/tasks to CIDR ranges 
+Description: Networking layer provides IP addressing and connectivity for containers.
+CF Information needed: ASG info from the config passed in from the garden external networker. For example, the cni-wrapper-plugin in silk-release[link to config passed in to cni-wrapper-plugin further in the doc here] - See `runtimeConfig.netOutRules`. If need non-applied asgs poll capi [link here].
 
-For local development, we recommend using [`cf-deployment` on BOSH-lite](https://github.com/cloudfoundry/cf-deployment).
+### External entities can reach applications through the GoRouter
+Description: Networking layer sets up firewall rules to allow ingress traffic from GoRouter, TCP router and SSH proxy.For example, the cni-wrapper-plugin insilk-release[link to config passed in to cni-wrapper-plugin further in the doc here] - See `runtimeConfig.portMappings`
 
-For guidance on these test suites, please reach out to our team in Slack (top of this page).
- 
-## MTU
+In order for the GoRouter, TCP router, and SSH proxy to be able to access your app, ports need to be configured.
+
+### App-to-app policies between app containers and task containers for those apps
+
+You need to have an agent running that is polling the internal policy server. For exmple, VXLAN Policy Agent. [Link to how to poll the internal policy server].
+
+
+### MTU
 CNI plugins should automatically detect the MTU settings on the host, and set the MTU
 on container network interfaces appropriately.  For example, if the host MTU is 1500 bytes
 and the plugin encapsulates with 50 bytes of header, the plugin should ensure that the
@@ -48,33 +48,12 @@ The built-in silk CNI plugin does this.
 Operators may wish to override the MTU setting. In this case they will set the BOSH property [cf_networking.mtu](http://bosh.io/jobs/cni?source=github.com/cloudfoundry/cf-networking-release#p=cf_networking.mtu).
 3rd party plugins should respect this value. This value will be included in the config object that is passed to the configured CNI plugin.
 
-## To author a BOSH release with your plugin
+###
 
-Your CNI plugin will need to be packaged as a [BOSH release](http://bosh.io/docs#release). 
+## Optional capabilities
 
-Add in all packages and jobs required by your CNI plugin.  At a minimum, you must provide a CNI binary program and a CNI config file.
-   If your software requires a long-lived daemon to run on the diego cell, we recommend you deploy a separate BOSH job for that.
-  - For more info on **bosh packaging scripts** read [this](http://bosh.io/docs/packages.html#create-a-packaging-script).
-  - For more info on **bosh jobs** read [this](http://bosh.io/docs/jobs.html).
-
-Use the [silk-release](http://github.com/cloudfoundry/silk-release) as inspiration.
-
-## To deploy your BOSH release with Cloud Foundry
-
-Update the [deployment manifest properties](http://bosh.io/docs/deployment-manifest.html#properties)
-    - The garden cni job properties must be configured to point to your plugin's paths.  
-
-  ```yaml
-  properties:
-    cf_networking:
-      cni_plugin_dir: /var/vcap/packages/YOUR_PACKAGE/bin # directory for CNI binaries
-      cni_config_dir: /var/vcap/jobs/YOUR_JOB/config/cni  # directory for CNI config file(s)
-  ```
-The above properties are configured on the garden-cni job: [`cni_config_dir`](http://bosh.io/jobs/garden-cni?source=github.com/cloudfoundry/cf-networking-release#p=cf_networking.cni_config_dir) and [`cni_plugin_dir`](http://bosh.io/jobs/garden-cni?source=github.com/cloudfoundry/cf-networking-release#p=cf_networking.cni_plugin_dir)
-
--- TODO: Is this yaml too mysterious?
-
-## What data will my CNI plugin receive?
+## Getting Data from CF
+### From Environtment Variables
 The `garden-external-networker` will invoke one or more CNI plugins, according to the [CNI Spec](https://github.com/containernetworking/cni/blob/master/SPEC.md).
 It will start with the CNI config files available in the [`cni_config_dir`](http://bosh.io/jobs/garden-cni?source=github.com/cloudfoundry/cf-networking-release#p=cf_networking.cni_config_dir) and also inject
 some dynamic information about the container. This is divided into two keys the first, `metadata`
@@ -180,8 +159,7 @@ Furthermore, the CNI runtime data, provided as environment variables, sets the
 
 When [Diego](https://github.com/cloudfoundry/diego-release) calls Garden, it sets that equal to the [`ActualLRP` `InstanceGuid`](https://godoc.org/code.cloudfoundry.org/bbs/models#ActualLRPInstanceKey).
 In this way, a 3rd-party system can relate data from CNI with data in the [Diego BBS](https://github.com/cloudfoundry/bbs/tree/master/doc).
-
-## Policy Server Internal API
+### From Policy Server Internal
 3rd party CNI plugins are expected to implement the features necessary to allow application containers to access on another. The policies that are created by cf users are retrieved from the Internal Policy Server. Clients to this api will need to poll this api to ensure the changes to the policies are honored.
 
 If you are replacing the built-in "VXLAN Policy Agent" with your own Policy Enforcement implementation, you can use the Policy Server's internal API to retrieve policy information.
@@ -190,7 +168,7 @@ There is a single endpoint to retrieve policies:
 
 `GET https://policy-server.service.cf.internal:4003/networking/v1/internal/policies`
 
-### API Details
+#### API Details
 
 `GET /networking/v1/internal/policies`
 
@@ -216,7 +194,7 @@ Response Body:
 
 To confirm that you've implemented this feature set correctly, run the [CF Networking Acceptance Tests](../src/test/acceptance) in a non-prod environment.
 
-### TLS configuration
+#### TLS configuration
 The Policy Server internal API requires Mutual TLS.  All connections must use a client certificate that is signed by a trusted certificate authority.  The certs and keys should be configured via BOSH manifest properties on the Policy Server and on your custom policy client, e.g.
 
 ```yaml
@@ -256,7 +234,7 @@ The server requires that connections use the TLS cipher suite `TLS_ECDHE_RSA_WIT
 
 We provide [a script](../scripts/generate-certs) to generate all required certs & keys.
 
-### Examples Requests and Responses
+#### Examples Requests and Responses
 
 #### Get all policies
 
@@ -386,3 +364,75 @@ https://policy-server.service.cf.internal:4003/networking/v1/internal/policies?i
 ```
 
 
+### From CAPI
+#### Poll for ASG
+### From BBS
+#### Subscribe to BBS event stream for receiving LRP events
+
+
+
+## Deploying your plugin 
+
+### To author a BOSH release with your plugin
+
+Your CNI plugin will need to be packaged as a [BOSH release](http://bosh.io/docs#release). 
+
+Add in all packages and jobs required by your CNI plugin.  At a minimum, you must provide a CNI binary program and a CNI config file.
+   If your software requires a long-lived daemon to run on the diego cell, we recommend you deploy a separate BOSH job for that.
+  - For more info on **bosh packaging scripts** read [this](http://bosh.io/docs/packages.html#create-a-packaging-script).
+  - For more info on **bosh jobs** read [this](http://bosh.io/docs/jobs.html).
+
+Use the [silk-release](http://github.com/cloudfoundry/silk-release) as inspiration.
+
+### To deploy your BOSH release with Cloud Foundry
+
+Update the [deployment manifest properties](http://bosh.io/docs/deployment-manifest.html#properties)
+    - The garden cni job properties must be configured to point to your plugin's paths.  
+
+  ```yaml
+  properties:
+    cf_networking:
+      cni_plugin_dir: /var/vcap/packages/YOUR_PACKAGE/bin # directory for CNI binaries
+      cni_config_dir: /var/vcap/jobs/YOUR_JOB/config/cni  # directory for CNI config file(s)
+  ```
+The above properties are configured on the garden-cni job: [`cni_config_dir`](http://bosh.io/jobs/garden-cni?source=github.com/cloudfoundry/cf-networking-release#p=cf_networking.cni_config_dir) and [`cni_plugin_dir`](http://bosh.io/jobs/garden-cni?source=github.com/cloudfoundry/cf-networking-release#p=cf_networking.cni_plugin_dir)
+
+-- TODO: Is this yaml too mysterious?
+
+## Tests
+
+A Cloud Foundry system that integrates a 3rd party networking component should be able to pass the following test suites:
+
+- [CF Networking Smoke Tests](../src/test/smoke)
+- [CF Networking Acceptance Tests](../src/test/acceptance)
+- [CF Acceptance Tests (CATs)](https://github.com/cloudfoundry/cf-acceptance-tests/)
+- [CF Routing Acceptance Tests (RATS)](https://github.com/cloudfoundry-incubator/routing-acceptance-tests)
+- Optional - [CF Disaster Recovery Acceptance Tests (DRATS)](https://github.com/cloudfoundry-incubator/disaster-recovery-acceptance-tests)
+
+Only the `CF Networking Smoke Tests` are non-disruptive and may be run against a live, production environment.  The other tests make potentially disruptive changes and should only be run against a non-production environment.
+
+For local development, we recommend using [`cf-deployment` on BOSH-lite](https://github.com/cloudfoundry/cf-deployment).
+
+For guidance on these test suites, please reach out to our team in Slack (top of this page).
+
+## Common Gotchas
+
+COMMON GOTCHA: If you want to integrate using the default values for the [`cni_config_dir`](http://bosh.io/jobs/garden-cni?source=github.com/cloudfoundry/cf-networking-release#p=cf_networking.cni_config_dir) and [`cni_plugin_dir`](http://bosh.io/jobs/garden-cni?source=github.com/cloudfoundry/cf-networking-release#p=cf_networking.cni_plugin_dir), your BOSH package for the CNI plugin *must* be named `cni` and the BOSH job for the CNI plugin *must* be named `cni`.
+
+If you have any questions or feedback, please visit the `#container-networking` channel on [Cloud Foundry Slack](http://slack.cloudfoundry.org/).
+
+
+
+
+
+
+
+
+
+
+
+
+
+## What data will my CNI plugin receive?
+
+## Policy Server Internal API
