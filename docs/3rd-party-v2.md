@@ -24,25 +24,17 @@
 
 ## Introduction
 
-*If you want to integrate your own CNI plugin with Cloud Foundry, begin by reviewing the component diagrams on the [architecture page](arch.md). Note that your plugin would replace the components in red, and take on the responsibilities of these components.*
+So you want to create your own CNI plugin with Cloud Foundry? 
 
-A CNI plugin is required to implement [this set of features](https://docs.google.com/spreadsheets/d/1Qdbod6a_25BoHGtCyQ2PFWheKhYR9OWFJrSaRLBNvqI). Associated tests suites are given to confirm the plugin implementation is correct. 
+First, all CNI plugins are required to implement [this set of features](https://github.com/containernetworking/cni/blob/master/SPEC.md). 
 
-Basic network connectivity is configured according to the [CNI specification](https://github.com/containernetworking/cni/blob/master/SPEC.md).
+Cloud Foundry requires the networking stack to perform certain additional functions which are currently not standardized by CNI. These are: These are spelled out later in this doc in more detail [here](TODO: link to mandatory features). 
 
-Cloud Foundry requires the networking stack to perform certain additional functions which are currently not standardized by CNI.  These are:
-
-0. Expose [container ports on the diego cell via DNAT](https://docs.run.pivotal.io/devguide/deploy-apps/environment-variable.html#CF-INSTANCE-PORTS)
-
-0. Enforce [Cloud Foundry Application Security Groups](https://docs.cloudfoundry.org/concepts/asg.html) for egress traffic from the application container 
-
-0. Enforce Container to Container Network Policies that have been configured in the [Policy Server API](API.md)
-
-Configuration for (0) and (1) is passed down via the semi-standardized `runtimeConfig` field described in the [CNI conventions document](https://github.com/containernetworking/cni/blob/master/CONVENTIONS.md).  See [What data will my CNI plugin receive](#what-data-will-my-cni-plugin-receive) below.
-
-Configuration for (2) is available via the [Policy Server Internal API](#policy-server-internal-api). 3rd party integrators should expect this component will be present in a standard CF deploy.
+There are also associated [tests suites](TODO: link to tests section) to confirm the plugin implementation is correct. 
 
 ## Architecture
+
+*If you want to integrate your own CNI plugin with Cloud Foundry, begin by reviewing the component diagrams on the [architecture page](arch.md). Note that your plugin would replace the components in red, and take on the responsibilities of these components.*
 
 ## Mandatory features
 
@@ -58,7 +50,7 @@ In addition to the features listed in the [CNI spec](), the following features a
 ### NetOut
 **Spec**: Operators can configure ASGs at the CF or space level to allow traffic from apps and tasks to CIDR ranges.
 
-**Description**: Networking layer provides IP addressing and connectivity for containers. The networking layer sets up firewall rules to allow traffic based on ASG configuration.
+**Description**: Networking layer provides IP addressing and connectivity for containers. The networking layer sets up firewall rules to allow traffic based on ASG configuration. For more information on ASGs, see [these docs](https://docs.cloudfoundry.org/concepts/asg.html).
 
 **CF Information Needed**: ASG information can be pulled from the config passed in from the garden external networker. See [`runtimeConfig.netOutRules`](). The ASG information provided there will only be for the ASGs that are currently applied to the app. If you want information about new ASGs has been added through Cloud Controller, but that haven't been passed through on the config because the app has not been restarted, you can [poll CAPI]().
 
@@ -67,7 +59,7 @@ In addition to the features listed in the [CNI spec](), the following features a
 
 **Description**: Networking layer sets up firewall rules to allow ingress traffic from GoRouter, TCP router and SSH proxy. 
 
-**CF Information Needed**: In order for the GoRouter, TCP router, and SSH proxy to be able to access your app, ports listed in `portMappings` need to be configured. For example, the cni-wrapper-plugin insilk-release[link to config passed in to cni-wrapper-plugin further in the doc here] - See `runtimeConfig.portMappings`
+**CF Information Needed**: In order for the GoRouter, TCP router, and SSH proxy to be able to access your app, ports listed in `portMappings` need to be exposed via DNAT. For example, the cni-wrapper-plugin insilk-release[link to config passed in to cni-wrapper-plugin further in the doc here] - See `runtimeConfig.portMappings`. These can also be retreived from [environment variables](https://docs.run.pivotal.io/devguide/deploy-apps/environment-variable.html#CF-INSTANCE-PORTS)
 
 ### Policy Confirguration
 **Spec**: App-to-app policies between app containers and task containers for those apps
@@ -153,6 +145,9 @@ The following features are optional for your CNI plugin:
 
 ## Getting Data from CF
 ### From Config
+
+This config is described in the [CNI conventions document](https://github.com/containernetworking/cni/blob/master/CONVENTIONS.md).
+
 The `garden-external-networker` will invoke one or more CNI plugins, according to the [CNI Spec](https://github.com/containernetworking/cni/blob/master/SPEC.md).
 It will start with the CNI config files available in the [`cni_config_dir`](http://bosh.io/jobs/garden-cni?source=github.com/cloudfoundry/cf-networking-release#p=cf_networking.cni_config_dir) and also inject
 some dynamic information about the container. This is divided into two keys the first, `metadata`
@@ -259,6 +254,11 @@ Furthermore, the CNI runtime data, provided as environment variables, sets the
 When [Diego](https://github.com/cloudfoundry/diego-release) calls Garden, it sets that equal to the [`ActualLRP` `InstanceGuid`](https://godoc.org/code.cloudfoundry.org/bbs/models#ActualLRPInstanceKey).
 In this way, a 3rd-party system can relate data from CNI with data in the [Diego BBS](https://github.com/cloudfoundry/bbs/tree/master/doc).
 ### From Policy Server Internal
+
+For an overview, read [these docs](API.md).
+
+3rd party integrators should expect this component will be present in a standard CF deploy.
+
 3rd party CNI plugins are expected to implement the features necessary to allow application containers to access on another. The policies that are created by cf users are retrieved from the Internal Policy Server. Clients to this api will need to poll this api to ensure the changes to the policies are honored.
 
 If you are replacing the built-in "VXLAN Policy Agent" with your own Policy Enforcement implementation, you can use the Policy Server's internal API to retrieve policy information.
