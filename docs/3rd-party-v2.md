@@ -1,5 +1,27 @@
 # 3rd Party Plugin Development for Container Networking
 
+## Table of Contents
+
+- Introduction
+- Architecture
+- Mandatory Features
+   - NetOut
+   - NetIn
+   - Policy Configuration
+   - MTU
+   - Bosh DNS
+   - Plugin is a bosh release
+- Optional Capabilities
+   - Per ASG Logging
+   - Global ASG and Container-to-Continer Logging
+   - Bosh Backup and Restore
+- Getting Data from CF
+   - From the Config
+   - From the Internal Policy Server
+   - From CAPI
+   - From  BBS
+- Common Gotchas
+
 ## Introduction
 
 *If you want to integrate your own CNI plugin with Cloud Foundry, begin by reviewing the component diagrams on the [architecture page](arch.md). Note that your plugin would replace the components in red, and take on the responsibilities of these components.*
@@ -130,7 +152,7 @@ The following features are optional for your CNI plugin:
 **CF Information Needed**: ?? TODO
 
 ## Getting Data from CF
-### From Environtment Variables
+### From Config
 The `garden-external-networker` will invoke one or more CNI plugins, according to the [CNI Spec](https://github.com/containernetworking/cni/blob/master/SPEC.md).
 It will start with the CNI config files available in the [`cni_config_dir`](http://bosh.io/jobs/garden-cni?source=github.com/cloudfoundry/cf-networking-release#p=cf_networking.cni_config_dir) and also inject
 some dynamic information about the container. This is divided into two keys the first, `metadata`
@@ -446,10 +468,6 @@ https://policy-server.service.cf.internal:4003/networking/v1/internal/policies?i
 ### From BBS
 #### Subscribe to BBS event stream for receiving LRP events
 
-
-
-
-
 ## Tests
 
 A Cloud Foundry system that integrates a 3rd party networking component should be able to pass the following test suites:
@@ -471,19 +489,3 @@ For guidance on these test suites, please reach out to our team in Slack (top of
 COMMON GOTCHA: If you want to integrate using the default values for the [`cni_config_dir`](http://bosh.io/jobs/garden-cni?source=github.com/cloudfoundry/cf-networking-release#p=cf_networking.cni_config_dir) and [`cni_plugin_dir`](http://bosh.io/jobs/garden-cni?source=github.com/cloudfoundry/cf-networking-release#p=cf_networking.cni_plugin_dir), your BOSH package for the CNI plugin *must* be named `cni` and the BOSH job for the CNI plugin *must* be named `cni`.
 
 If you have any questions or feedback, please visit the `#container-networking` channel on [Cloud Foundry Slack](http://slack.cloudfoundry.org/).
-
-
-
-
-
-
-
-
-
-
-
-
-
-## What data will my CNI plugin receive?
-
-## Policy Server Internal API
