@@ -21,6 +21,7 @@
    - From CAPI
    - From  BBS
 - Common Gotchas
+- Feedback
 
 ## Introduction
 
@@ -286,6 +287,8 @@ For guidance on these test suites, please reach out to our team in Slack (top of
 
 ## Common Gotchas
 
-COMMON GOTCHA: If you want to integrate using the default values for the [`cni_config_dir`](http://bosh.io/jobs/garden-cni?source=github.com/cloudfoundry/cf-networking-release#p=cf_networking.cni_config_dir) and [`cni_plugin_dir`](http://bosh.io/jobs/garden-cni?source=github.com/cloudfoundry/cf-networking-release#p=cf_networking.cni_plugin_dir), your BOSH package for the CNI plugin *must* be named `cni` and the BOSH job for the CNI plugin *must* be named `cni`.
+If you want to integrate using the default values for the [`cni_config_dir`](http://bosh.io/jobs/garden-cni?source=github.com/cloudfoundry/cf-networking-release#p=cf_networking.cni_config_dir) and [`cni_plugin_dir`](http://bosh.io/jobs/garden-cni?source=github.com/cloudfoundry/cf-networking-release#p=cf_networking.cni_plugin_dir), your BOSH package for the CNI plugin *must* be named `cni` and the BOSH job for the CNI plugin *must* be named `cni`.
 
+
+## Feedback
 If you have any questions or feedback, please visit the `#container-networking` channel on [Cloud Foundry Slack](http://slack.cloudfoundry.org/).
