@@ -16,7 +16,7 @@
 * [Optional capabilities](#optional-capabilities)
   * [Per ASG Logging](#per-asg-logging)
   * [Global ASG and Container-to-Container Logging](#global-asg-and-container-to-container-logging)
-  * [Bosh Backup and Restore](bosh-backup-and-restore)
+  * [Bosh Backup and Restore](#bosh-backup-and-restore)
   * [Bosh DNS](#bosh-dns)
 * [Getting Data from CF](#getting-data-from-cf)
   * [From Config](#from-config)
@@ -77,7 +77,7 @@ following features are required.
 
 **Description**: The networking layer sets up firewall rules to allow container-to-container traffic based on policy  (v1 of policy API must be supported).
 
-**CF Information Needed**: You need to have an agent running that is polling the internal policy server. For example, [VXLAN Policy Agent](https://bosh.io/jobs/vxlan-policy-agent?source=github.com/cloudfoundry/silk-release) in [silk-release](code.cloudfoundry.org/silk-release) polls the [internal policy server](#information-from-internal-policy-server).
+**CF Information Needed**: You need to have an agent running that is polling the internal policy server. For example, [VXLAN Policy Agent](https://bosh.io/jobs/vxlan-policy-agent?source=github.com/cloudfoundry/silk-release) in [silk-release](https://code.cloudfoundry.org/silk-release) polls the [internal policy server](#information-from-internal-policy-server).
 
 ### MTU
 
@@ -89,7 +89,7 @@ and the plugin encapsulates with 50 bytes of header, the plugin should ensure th
 container MTU is no greater than 1450 bytes. This is to ensure there is no fragmentation.
 The built-in silk CNI plugin does this.
 
-Operators may wish to override the MTU setting. It is recommended to expose MTU as a Bosh property on your CNI job, as the [cni](http://bosh.io/jobs/cni?source=github.com/cloudfoundry/silk-release#p=mtu) job in [silk-release](code.cloudfoundry.org/silk-release).
+Operators may wish to override the MTU setting. It is recommended to expose MTU as a Bosh property on your CNI job, as the [cni](http://bosh.io/jobs/cni?source=github.com/cloudfoundry/silk-release#p=mtu) job in [silk-release](https://code.cloudfoundry.org/silk-release).
 
 **CF Information Needed**: None.
 
@@ -145,18 +145,18 @@ The following features are optional for your CNI plugin:
 ### Bosh Backup and Restore
 **Spec**: Operators can backup and restore Bosh deployments.
 
-**Description**: Add support for [BBR](code.cloudfoundry.org/bosh-backup-and-restore) if there is data that must be retained after a backup and restore operation.
+**Description**: Add support for [BBR](https://code.cloudfoundry.org/bosh-backup-and-restore) if there is data that must be retained after a backup and restore operation.
 
 **CF Information Needed**: None. For inspiration on conforming to BBR, see the [bbr-cfnetworkingdb](https://bosh.io/jobs/bbr-cfnetworkingdb?source=github.com/cloudfoundry-incubator/cf-networking-release) job and the backup script templates for the [policy server job](https://bosh.io/jobs/policy-server?source=github.com/cloudfoundry/cf-networking-release).
 
-[silk-release](code.cloudfoundry.org/silk-release), on the other hand, is built in a way that it is resilient to data loss in the silk-controller.
+[silk-release](https://code.cloudfoundry.org/silk-release), on the other hand, is built in a way that it is resilient to data loss in the silk-controller.
 
 ### Bosh DNS
 **Spec**: Apps can connect to services using [Bosh DNS](https://bosh.io/jobs/bosh-dns?source=github.com/cloudfoundry/dns-release).
 
 **Description**: The networking layer allows containers to reach Bosh DNS on the cell at `169.254.0.2`.
 
-**CF Information Needed**: None. [silk-release](code.cloudfoundry.org/silk-release) exposes [this Bosh property](http://bosh.io/jobs/cni?source=github.com/cloudfoundry/silk-release#p=dns_servers) for an operator to set to `- 169.254.0.2`, that will allow containers to reach Bosh DNS on the cell. Setting this property causes the silk plugin to add dns nameserver information in the response back to the garden external networker. This has the notable side effect of causing the `/etc/resolv.conf` to have only the nameservers specified by this property, and nothing else. If this property is omitted, the `/etc/resolv.conf` in the container will have a close resemblance to the host vm's `/etc/resolv.conf`. 
+**CF Information Needed**: None. [silk-release](https://code.cloudfoundry.org/silk-release) exposes [this Bosh property](http://bosh.io/jobs/cni?source=github.com/cloudfoundry/silk-release#p=dns_servers) for an operator to set to `- 169.254.0.2`, that will allow containers to reach Bosh DNS on the cell. Setting this property causes the silk plugin to add dns nameserver information in the response back to the garden external networker. This has the notable side effect of causing the `/etc/resolv.conf` to have only the nameservers specified by this property, and nothing else. If this property is omitted, the `/etc/resolv.conf` in the container will have a close resemblance to the host vm's `/etc/resolv.conf`. 
 
 ## Getting Data from CF
 ### From Config
@@ -291,7 +291,7 @@ If you want information on org, space, app events for use by your CNI plugin, se
 
 #### Subscribe to BBS event stream for receiving LRP events
 
-None of silk-release communicates directly with the BBS. For inspiration on how to subscribe to the BBS event stream, see the [route-emitter job](https://bosh.io/jobs/route_emitter?source=github.com/cloudfoundry/diego-release) and [code](code.cloudfoundry.org/route-emitter).
+None of silk-release communicates directly with the BBS. For inspiration on how to subscribe to the BBS event stream, see the [route-emitter job](https://bosh.io/jobs/route_emitter?source=github.com/cloudfoundry/diego-release) and [code](https://code.cloudfoundry.org/route-emitter).
 
 #### Registering container IPs instead of port mappings with the RE
 
