@@ -156,7 +156,7 @@ The following features are optional for your CNI plugin:
 
 **Description**: The networking layer allows containers to reach Bosh DNS on the cell at `169.254.0.2`.
 
-**CF Information Needed**: None. [silk-release](code.cloudfoundry.org/silk-release) exposes [this Bosh property](http://bosh.io/jobs/cni?source=github.com/cloudfoundry/silk-release#p=dns_servers) for an operator to set to `- 169.254.0.2`, that will allow containers to reach Bosh DNS on the cell.
+**CF Information Needed**: None. [silk-release](code.cloudfoundry.org/silk-release) exposes [this Bosh property](http://bosh.io/jobs/cni?source=github.com/cloudfoundry/silk-release#p=dns_servers) for an operator to set to `- 169.254.0.2`, that will allow containers to reach Bosh DNS on the cell. Setting this property causes the silk plugin to add dns nameserver information in the response back to the garden external networker. This has the notable side effect of causing the `/etc/resolv.conf` to have only the nameservers specified by this property, and nothing else. If this property is omitted, the `/etc/resolv.conf` in the container will have a close resemblance to the host vm's `/etc/resolv.conf`. 
 
 ## Getting Data from CF
 ### From Config
@@ -283,7 +283,7 @@ For how to use the Internal Policy Server API, [read here](API.md).
 #### Poll for Cloud Controller for ASGs or events
 
 None of silk-release communicates directly with CAPI. Information about ASGs are passed in on container creation.
-If you want information about new ASGs has been added through Cloud Controller, but that haven't been passed through on the config because the app has not been restarted, you can [poll CAPI](https://apidocs.cloudfoundry.org/280/security_groups/list_all_security_groups.html).
+If you want information about new ASGs that have been added through Cloud Controller, but that haven't been passed through on the config because the app has not been restarted, you can [poll CAPI](https://apidocs.cloudfoundry.org/280/security_groups/list_all_security_groups.html).
 
 If you want information on org, space, app events for use by your CNI plugin, see [the CF API docs](https://apidocs.cloudfoundry.org/280).
 
