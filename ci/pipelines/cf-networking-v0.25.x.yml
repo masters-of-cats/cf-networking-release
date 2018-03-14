@@ -198,12 +198,13 @@ jobs:
         LB_DOMAIN: panama.c2c.cf-app.com
         BBL_ENV_NAME: panama
       input_mapping:
-        env-repo: cf-networking-deployments
+        bbl-state: cf-networking-deployments
+        bbl-config: cf-networking-deployments
         ops-files: cf-networking-deployments
       ensure:
         put: cf-networking-deployments
         params:
-          repository: updated-env-repo
+          repository: updated-bbl-state
           rebase: true
 
   - name: panama-bbl-destroy
@@ -217,18 +218,18 @@ jobs:
       params:
         BBL_STATE_DIR: environments/panama/
       input_mapping:
-        env-repo: cf-networking-deployments
+        bbl-state: cf-networking-deployments
     - task: bbl-destroy
       file: cf-deployment-concourse-tasks/bbl-destroy/task.yml
       params:
         BBL_STATE_DIR: environments/panama/
         BBL_GCP_SERVICE_ACCOUNT_KEY: environments/gcp/service-account.key.json
       input_mapping:
-        env-repo: cf-networking-deployments
+        bbl-state: cf-networking-deployments
       ensure:
         put: cf-networking-deployments
         params:
-          repository: updated-env-repo
+          repository: updated-bbl-state
           rebase: true
 
   - name: panama-deploy
@@ -249,7 +250,7 @@ jobs:
       params:
         BBL_STATE_DIR: environments/panama/
       input_mapping:
-        env-repo: cf-networking-deployments
+        bbl-state: cf-networking-deployments
     - task: collect-ops-files
       file: cf-networking-ci/ci/tasks/collect-ops-files.yml
       params:
@@ -265,7 +266,7 @@ jobs:
         OPS_FILES: gcp.yml use-3-azs-for-router.yml use-compiled-releases.yml cf-networking.yml opsfile.yml
         VARS_STORE_FILE: environments/panama/vars-store.yml
       input_mapping:
-        env-repo: cf-networking-deployments
+        bbl-state: cf-networking-deployments
         release: cf-networking-v0.25.x
         vars-files: cf-networking-deployments
         vars-store: cf-networking-deployments
@@ -280,7 +281,7 @@ jobs:
         BBL_STATE_DIR: environments/panama/
         CLEAN_ALL: false
       input_mapping:
-        env-repo: cf-networking-deployments
+        bbl-state: cf-networking-deployments
 
   - name: panama-test
     serial_groups: [panama]
@@ -322,12 +323,13 @@ jobs:
         LB_DOMAIN: kofia.c2c.cf-app.com
         BBL_ENV_NAME: kofia
       input_mapping:
-        env-repo: cf-networking-deployments
+        bbl-state: cf-networking-deployments
+        bbl-config: cf-networking-deployments
         ops-files: cf-networking-deployments
       ensure:
         put: cf-networking-deployments
         params:
-          repository: updated-env-repo
+          repository: updated-bbl-state
           rebase: true
 
   - name: kofia-bbl-destroy
@@ -341,18 +343,18 @@ jobs:
       params:
         BBL_STATE_DIR: environments/kofia/
       input_mapping:
-        env-repo: cf-networking-deployments
+        bbl-state: cf-networking-deployments
     - task: bbl-destroy
       file: cf-deployment-concourse-tasks/bbl-destroy/task.yml
       params:
         BBL_GCP_SERVICE_ACCOUNT_KEY: environments/gcp/service-account.key.json
         BBL_STATE_DIR: environments/kofia/
       input_mapping:
-        env-repo: cf-networking-deployments
+        bbl-state: cf-networking-deployments
       ensure:
         put: cf-networking-deployments
         params:
-          repository: updated-env-repo
+          repository: updated-bbl-state
           rebase: true
 
   - name: kofia-deploy
@@ -377,7 +379,7 @@ jobs:
       params:
         BBL_STATE_DIR: environments/kofia/
       input_mapping:
-        env-repo: cf-networking-deployments
+        bbl-state: cf-networking-deployments
     - task: collect-ops-files
       file: cf-networking-ci/ci/tasks/collect-ops-files.yml
       params:
@@ -393,7 +395,7 @@ jobs:
         OPS_FILES: gcp.yml use-3-azs-for-router.yml use-compiled-releases.yml cf-networking.yml opsfile.yml custom-apps-domain.yml
         VARS_STORE_FILE: environments/kofia/vars-store.yml
       input_mapping:
-        env-repo: cf-networking-deployments
+        bbl-state: cf-networking-deployments
         vars-store: cf-networking-deployments
         vars-files: cf-networking-deployments
         release: cf-networking-v0.25.x
@@ -417,7 +419,7 @@ jobs:
         BBL_STATE_DIR: environments/kofia/
         CLEAN_ALL: false
       input_mapping:
-        env-repo: cf-networking-deployments
+        bbl-state: cf-networking-deployments
 
   - name: kofia-test
     serial_groups: [kofia-test-group, kofia-deploy-group]
@@ -513,7 +515,7 @@ jobs:
       params:
         BBL_STATE_DIR: environments/panama/
       input_mapping:
-        env-repo: cf-networking-deployments
+        bbl-state: cf-networking-deployments
 
   - name: delete-deployment-kofia-cf
     public: true
@@ -527,7 +529,7 @@ jobs:
       params:
         BBL_STATE_DIR: environments/kofia/
       input_mapping:
-        env-repo: cf-networking-deployments
+        bbl-state: cf-networking-deployments
 
   - name: ship-what
     serial_groups: [version]
