@@ -68,7 +68,7 @@ resources:
     source:
       uri: https://github.com/cloudfoundry/cf-deployment-concourse-tasks
       branch: master
-      tag_filter: "v*"
+      tag_filter: v6.1
   - name: cf-deployment
     type: git
     source:
@@ -185,6 +185,7 @@ jobs:
     plan:
     - aggregate:
       - get: cf-deployment-concourse-tasks
+        version: {ref: v6.1}
       - get: cf-networking-deployments
     - task: bbl-up
       file: cf-deployment-concourse-tasks/bbl-up/task.yml
@@ -212,6 +213,7 @@ jobs:
     plan:
     - aggregate:
       - get: cf-deployment-concourse-tasks
+        version: {ref: v6.1}
       - get: cf-networking-deployments
     - task: bosh-cleanup
       file: cf-deployment-concourse-tasks/bosh-cleanup/task.yml
@@ -238,6 +240,7 @@ jobs:
     - aggregate:
       - get: cf-networking-ci
       - get: cf-deployment-concourse-tasks
+        version: {ref: v6.1}
       - get: cf-networking-deployments
       - get: cf-deployment
         version: {ref: v0.4.0}
@@ -310,6 +313,7 @@ jobs:
     plan:
     - aggregate:
       - get: cf-deployment-concourse-tasks
+        version: {ref: v6.1}
       - get: cf-networking-deployments
     - task: bbl-up
       file: cf-deployment-concourse-tasks/bbl-up/task.yml
@@ -337,6 +341,7 @@ jobs:
     plan:
     - aggregate:
       - get: cf-deployment-concourse-tasks
+        version: {ref: v6.1}
       - get: cf-networking-deployments
     - task: bosh-cleanup
       file: cf-deployment-concourse-tasks/bosh-cleanup/task.yml
@@ -363,6 +368,7 @@ jobs:
     - aggregate:
       - get: cf-networking-ci
       - get: cf-deployment-concourse-tasks
+        version: {ref: v6.1}
       - get: cf-networking-deployments
       - get: cf-deployment
         version: {ref: v0.4.0}
@@ -510,6 +516,7 @@ jobs:
     - aggregate:
       - get: cf-networking-deployments
       - get: cf-deployment-concourse-tasks
+        version: {ref: v6.1}
     - task: delete-deployment
       file: cf-deployment-concourse-tasks/bosh-delete-deployment/task.yml
       params:
@@ -524,6 +531,7 @@ jobs:
     - aggregate:
       - get: cf-networking-deployments
       - get: cf-deployment-concourse-tasks
+        version: {ref: v6.1}
     - task: delete-deployment
       file: cf-deployment-concourse-tasks/bosh-delete-deployment/task.yml
       params:
