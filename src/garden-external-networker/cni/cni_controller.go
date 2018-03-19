@@ -13,8 +13,9 @@ type cniLibrary interface {
 }
 
 type CNIController struct {
-	CNIConfig      libcni.CNI
-	NetworkConfigs []*libcni.NetworkConfig
+	CNIConfig          libcni.CNI
+	NetworkConfigs     []*libcni.NetworkConfig
+	NetworkConfigLists []*libcni.NetworkConfigList
 }
 
 func (c *CNIController) Up(namespacePath, handle string, metadata map[string]interface{}, legacyNetConf map[string]interface{}) (types.Result, error) {

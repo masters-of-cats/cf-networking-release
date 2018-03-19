@@ -18,8 +18,9 @@ func (l *CNILoader) GetCNIConfig() *libcni.CNIConfig {
 	return &libcni.CNIConfig{Path: []string{l.PluginDir}}
 }
 
-func (l *CNILoader) GetNetworkConfigs() ([]*libcni.NetworkConfig, error) {
+func (l *CNILoader) GetNetworkConfigs() ([]*libcni.NetworkConfig, []*libcni.NetworkConfigList, error) {
 	networkConfigs := []*libcni.NetworkConfig{}
+	networkListConfigs := []*libcni.NetworkConfigList{}
 	err := filepath.Walk(l.ConfigDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -29,22 +30,32 @@ func (l *CNILoader) GetNetworkConfigs() ([]*libcni.NetworkConfig, error) {
 			return nil
 		}
 
-		if !strings.HasSuffix(path, ".conf") {
+		if strings.HasSuffix(path, ".conf") {
+			conf, err := libcni.ConfFromFile(path)
+			if err != nil {
+				return fmt.Errorf("unable to load config from %s: %s", path, err)
+			}
+
+			networkConfigs = append(networkConfigs, conf)
 			return nil
 		}
 
-		conf, err := libcni.ConfFromFile(path)
-		if err != nil {
-			return fmt.Errorf("unable to load config from %s: %s", path, err)
+		if strings.HasSuffix(path, ".conflist") {
+			confList, err := libcni.ConfListFromFile(path)
+			if err != nil {
+				return fmt.Errorf("unable to load config from %s: %s", path, err)
+			}
+
+			networkListConfigs = append(networkListConfigs, confList)
+			return nil
 		}
 
-		networkConfigs = append(networkConfigs, conf)
 		return nil
 	})
 
 	if err != nil {
-		return networkConfigs, fmt.Errorf("error loading config: %s", err)
+		return networkConfigs, networkListConfigs, fmt.Errorf("error loading config: %s", err)
 	}
 
-	return networkConfigs, nil
+	return networkConfigs, networkListConfigs, nil
 }
