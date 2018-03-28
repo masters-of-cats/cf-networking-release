@@ -10,11 +10,9 @@ export CF_HOME=$DATA_DIR/cf-home
 mkdir -p $CF_HOME
 
 export CONFIG=/var/vcap/jobs/cf-networking-acceptance/config.json
-export APPS_DIR=$GOPATH/src/example-apps
-
-echo "GOPATH before = ${GOPATH}"
-echo "PATH = ${PATH}"
 export GOPATH=/var/vcap/packages/cf-networking-acceptance
+export APPS_DIR=$GOPATH/src/example-apps
+export PATH=$PATH:$GOPATH/bin
 go build -o "$GOPATH/bin/ginkgo" github.com/onsi/ginkgo/ginkgo
 
 cd $GOPATH/src/test/acceptance
