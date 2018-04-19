@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/containernetworking/plugins/pkg/ns"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
@@ -83,11 +84,19 @@ func sameFile(path1, path2 string) bool {
 
 const DEFAULT_TIMEOUT = "10s"
 const GlobalIPTablesLockFile = "/tmp/netman/iptables.lock"
+const PROXY_CHAIN_NAME = "proxy"
 
 func buildStdin(inputs interface{}) io.Reader {
 	jsonBytes, err := json.Marshal(inputs)
 	Expect(err).NotTo(HaveOccurred())
 	return bytes.NewReader(jsonBytes)
+}
+
+func containerIPTablesRules(containerNetns string, tableName string) []string {
+	iptablesSession, err := gexec.Start(exec.Command("ip", "netns", "exec", containerNetns, "iptables", "-w", "-S", "-t", tableName), GinkgoWriter, GinkgoWriter)
+	Expect(err).NotTo(HaveOccurred())
+	Eventually(iptablesSession).Should(gexec.Exit(0))
+	return strings.Split(string(iptablesSession.Out.Contents()), "\n")
 }
 
 var _ = Describe("Garden External Networker", func() {
@@ -99,6 +108,11 @@ var _ = Describe("Garden External Networker", func() {
 		bindMountRoot          string
 		stateFilePath          string
 		containerHandle        string
+		containerNetNS         ns.NetNS
+		containerNSShortName   string
+		proxyRedirectCIDR      string
+		proxyPort              int
+		proxyUID               int
 		fakeProcess            *os.Process
 		fakeConfigFilePath     string
 		upCommand, downCommand *exec.Cmd
@@ -119,8 +133,14 @@ var _ = Describe("Garden External Networker", func() {
 			sleepCmd = exec.Command("powershell", "Start-Sleep", "1000")
 		}
 
-		Expect(sleepCmd.Start()).To(Succeed())
-		fakeProcess = sleepCmd.Process
+		containerNetNS = createNetworkNamespace()
+		containerNSShortName = filepath.Base(containerNetNS.Path())
+
+		Expect(containerNetNS.Do(func(_ ns.NetNS) error {
+			err := sleepCmd.Start()
+			fakeProcess = sleepCmd.Process
+			return err
+		})).To(Succeed())
 
 		fakePid = fakeProcess.Pid
 
@@ -141,15 +161,22 @@ var _ = Describe("Garden External Networker", func() {
 		configFile, err := ioutil.TempFile("", "adapter-config-")
 		Expect(err).NotTo(HaveOccurred())
 		fakeConfigFilePath = configFile.Name()
+		proxyRedirectCIDR = "10.255.0.0/16"
+		proxyPort = 9999
+		proxyUID = 1
+
 		config := map[string]interface{}{
-			"cni_plugin_dir":  paths.CniPluginDir,
-			"cni_config_dir":  cniConfigDir,
-			"bind_mount_dir":  bindMountRoot,
-			"overlay_network": "10.255.0.0/16",
-			"state_file":      stateFilePath,
-			"start_port":      60000,
-			"total_ports":     56,
-			"log_prefix":      "cfnetworking",
+			"cni_plugin_dir":      paths.CniPluginDir,
+			"cni_config_dir":      cniConfigDir,
+			"bind_mount_dir":      bindMountRoot,
+			"iptables_lock_file":  GlobalIPTablesLockFile,
+			"proxy_redirect_cidr": proxyRedirectCIDR,
+			"proxy_port":          proxyPort,
+			"proxy_uid":           proxyUID,
+			"state_file":          stateFilePath,
+			"start_port":          60000,
+			"total_ports":         56,
+			"log_prefix":          "cfnetworking",
 			"search_domains": []string{
 				"pivotal.io",
 				"foo.bar",
@@ -219,10 +246,29 @@ var _ = Describe("Garden External Networker", func() {
 	})
 
 	AfterEach(func() {
+		removeNetworkNamespace(containerNetNS)
+
 		Expect(os.Remove(fakeConfigFilePath)).To(Succeed())
 		Expect(os.RemoveAll(cniConfigDir)).To(Succeed())
 		Expect(os.RemoveAll(fakeLogDir)).To(Succeed())
 		Expect(fakeProcess.Kill()).To(Succeed())
+	})
+
+	FIt("should setup proxy iptable rules inside the container network namespace", func() {
+		runAndWait(upCommand)
+
+		By("checking that the envoy chain is created")
+		Expect(containerIPTablesRules(containerNSShortName, "nat")).To(ContainElement("-N " + PROXY_CHAIN_NAME))
+
+		By("checking that the output chain jumps to the envoy chain")
+		Expect(containerIPTablesRules(containerNSShortName, "nat")).To(ContainElement("-A OUTPUT -j " + PROXY_CHAIN_NAME))
+
+		By("checking that the envoy chain returns when the owner is not vcap")
+		Expect(containerIPTablesRules(containerNSShortName, "nat")).To(ContainElement(fmt.Sprintf("-A %s -m owner --uid-owner %d -j RETURN", PROXY_CHAIN_NAME, proxyUID)))
+
+		By("checking that the envoy chain redirects to the proxy port")
+		Expect(containerIPTablesRules(containerNSShortName, "nat")).To(ContainElement(fmt.Sprintf("-A %s -d %s -p tcp -j REDIRECT --to-ports %d", PROXY_CHAIN_NAME, proxyRedirectCIDR, proxyPort)))
+
 	})
 
 	It("should call CNI ADD and DEL", func() {
@@ -330,14 +376,14 @@ var _ = Describe("Garden External Networker", func() {
 	Context("when the configuration search_domains list is empty", func() {
 		BeforeEach(func() {
 			config := map[string]interface{}{
-				"cni_plugin_dir":  paths.CniPluginDir,
-				"cni_config_dir":  cniConfigDir,
-				"bind_mount_dir":  bindMountRoot,
-				"overlay_network": "10.255.0.0/16",
-				"state_file":      stateFilePath,
-				"start_port":      60000,
-				"total_ports":     56,
-				"log_prefix":      "cfnetworking",
+				"cni_plugin_dir":      paths.CniPluginDir,
+				"cni_config_dir":      cniConfigDir,
+				"bind_mount_dir":      bindMountRoot,
+				"proxy_redirect_cidr": "10.255.0.0/16",
+				"state_file":          stateFilePath,
+				"start_port":          60000,
+				"total_ports":         56,
+				"log_prefix":          "cfnetworking",
 			}
 			configBytes, err := json.Marshal(config)
 			Expect(err).NotTo(HaveOccurred())
@@ -376,4 +422,14 @@ func runAndWait(cmd *exec.Cmd) *gexec.Session {
 	Expect(err).NotTo(HaveOccurred())
 	Eventually(session, DEFAULT_TIMEOUT).Should(gexec.Exit(0))
 	return session
+}
+
+func createNetworkNamespace() ns.NetNS {
+	networkNS, err := ns.NewNS()
+	Expect(err).ToNot(HaveOccurred())
+	return networkNS
+}
+
+func removeNetworkNamespace(containerNetNs ns.NetNS) {
+	Expect(containerNetNs.Close()).To(Succeed())
 }

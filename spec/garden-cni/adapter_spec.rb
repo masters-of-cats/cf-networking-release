@@ -15,7 +15,8 @@ module Bosh::Template::Test
           'cni_config_dir' => "meow-config-dir",
           'nat_port_range_start' => 1111,
           'nat_port_range_size' => 5555,
-          'search_domains' => ["meow", "woof", "neopets"]
+          'search_domains' => ["meow", "woof", "neopets"],
+          'proxy_redirect_cidr' => "some-proxy-cidr"
         }
       end
 
@@ -35,7 +36,11 @@ module Bosh::Template::Test
               "start_port" => 1111,
               "total_ports" => 5555,
               "log_prefix" => "cfnetworking",
-              "search_domains" => ["meow", "woof", "neopets"]
+              "search_domains" => ["meow", "woof", "neopets"],
+              "iptables_lock_file" => "/var/vcap/data/garden-cni/iptables.lock",
+              "proxy_redirect_cidr" => "some-proxy-cidr",
+              "proxy_port" => 16001,
+              "proxy_uid" => 0,
             })
           end
         end
