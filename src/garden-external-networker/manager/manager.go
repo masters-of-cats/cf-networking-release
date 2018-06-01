@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 
 	"code.cloudfoundry.org/garden"
@@ -47,6 +48,7 @@ type Manager struct {
 
 type UpInputs struct {
 	Pid        int
+	NetNsFd    int
 	Properties map[string]interface{}
 	NetOut     []garden.NetOutRule `json:"netout_rules"`
 	NetIn      []garden.NetIn      `json:"netin"`
@@ -62,14 +64,22 @@ type UpOutputs struct {
 }
 
 func (m *Manager) Up(containerHandle string, inputs UpInputs) (*UpOutputs, error) {
-	if inputs.Pid == 0 {
-		return nil, errors.New("up missing pid")
-	}
 	if containerHandle == "" {
 		return nil, errors.New("up missing container handle")
 	}
 
-	procNsPath := fmt.Sprintf("/proc/%d/ns/net", inputs.Pid)
+	var procNsPath string
+	if inputs.Pid != 0 {
+		procNsPath = fmt.Sprintf("/proc/%d/ns/net", inputs.Pid)
+	} else if inputs.NetNsFd != 0 {
+		var err error
+		procNsPath, err = os.Readlink(fmt.Sprintf("/proc/self/fd/%d", inputs.NetNsFd))
+		if err != nil {
+			return nil, errors.New("cannot read from fd to net ns of container")
+		}
+	} else {
+		return nil, errors.New("up missing pid and file descriptor to net ns")
+	}
 	bindMountPath := filepath.Join(m.BindMountRoot, containerHandle)
 
 	err := m.Mounter.IdempotentlyMount(procNsPath, bindMountPath)
