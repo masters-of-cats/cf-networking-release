@@ -1,14 +1,7 @@
 <% unless p("disable") %>
-check process policy-server
+check process garden-external-networker
   with pidfile /var/vcap/sys/run/garden_external_networker/pid
-  start program "/usr/bin/timeout 25 /var/vcap/jobs/garden-external-networker/bin/ext-plugin_ctl start"
-   with timeout 30 seconds
+  start program "/var/vcap/jobs/garden-external-networker/bin/ext-plugin_ctl start" with timeout 30 seconds
   stop program "/var/vcap/jobs/garden-external-networker/bin/ext-plugin_ctl stop"
   group vcap
-  if failed
-     host 127.0.0.1
-     port <%= p("listen_port") %>
-     protocol HTTP
-     with timeout 10 seconds for 6 cycles
-     then restart
 <% end %>

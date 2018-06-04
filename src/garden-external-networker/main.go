@@ -23,10 +23,11 @@ import (
 )
 
 var (
-	action    string
-	handle    string
-	cfg       config.Config
-	logPrefix = "cfnetworking"
+	action     string
+	handle     string
+	cfg        config.Config
+	logPrefix  = "cfnetworking"
+	socketPath string
 )
 
 func parseArgs(allArgs []string) error {
@@ -37,6 +38,7 @@ func parseArgs(allArgs []string) error {
 	flagSet.StringVar(&action, "action", "", "")
 	flagSet.StringVar(&handle, "handle", "", "")
 	flagSet.StringVar(&configFilePath, "configFile", "", "")
+	flagSet.StringVar(&socketPath, "socket", "", "")
 
 	err := flagSet.Parse(allArgs[1:])
 	if err != nil {
@@ -56,17 +58,20 @@ func parseArgs(allArgs []string) error {
 		return fmt.Errorf("unexpected extra args: %+v", flagSet.Args())
 	}
 
-	if handle == "" {
-		return fmt.Errorf("missing required flag 'handle'")
-	}
+	if socketPath == "" {
+		if handle == "" {
+			return fmt.Errorf("missing required flag 'handle'")
+		}
 
-	if action == "" {
-		return fmt.Errorf("missing required flag 'action'")
+		if action == "" {
+			return fmt.Errorf("missing required flag 'action'")
+		}
 	}
 
 	return nil
 }
 
+// We need to deploy Garden to use this
 func main() {
 	if err := mainWithError(os.Stderr); err != nil {
 		if cfg.LogPrefix != "" {
@@ -90,7 +95,7 @@ func mainWithError(logger io.Writer) error {
 	cniLoader := &cni.CNILoader{
 		PluginDir: cfg.CniPluginDir,
 		ConfigDir: cfg.CniConfigDir,
-		Logger: logger,
+		Logger:    logger,
 	}
 
 	networkConfigList, err := cniLoader.GetNetworkConfig()
@@ -99,7 +104,7 @@ func mainWithError(logger io.Writer) error {
 	}
 
 	cniController := &cni.CNIController{
-		CNIConfig:          cniLoader.GetCNIConfig(),
+		CNIConfig:         cniLoader.GetCNIConfig(),
 		NetworkConfigList: networkConfigList,
 	}
 
@@ -158,5 +163,8 @@ func mainWithError(logger io.Writer) error {
 		Down: manager.Down,
 	}
 
-	return mux.Handle(action, handle, os.Stdin, os.Stdout)
+	if socketPath == "" {
+		return mux.Handle(action, handle, os.Stdin, os.Stdout)
+	}
+	return mux.HandleWithSocket(socketPath)
 }

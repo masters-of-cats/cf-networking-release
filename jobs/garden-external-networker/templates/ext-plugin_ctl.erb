@@ -10,11 +10,16 @@ case $1 in
     mkdir -p $RUN_DIR $LOG_DIR
     chown -R vcap:vcap $RUN_DIR $LOG_DIR
 
+    <% if p("socket") != "" %>
+      mkdir -p $(dirname <%= p("socket") %>) 
+      chown -R vcap:vcap $(dirname <%= p("socket") %>) 
+    <% end %>
+
     echo $$ > $PIDFILE
 
     exec /var/vcap/packages/runc-cni/bin/garden-external-networker \
-    -socket <%= p("socket") %>
-    -config_file <%= p("config_file") %>
+    -socket <%= p("socket") %> \
+    -configFile <%= p("config_file") %> \
       >>  $LOG_DIR/garden_external_networker.log \
       2>> $LOG_DIR/garden_external_networker.stderr.log
 
@@ -23,6 +28,9 @@ case $1 in
   stop)
     kill -9 `cat $PIDFILE`
     rm -f $PIDFILE
+    <% if p("socket") != "" %>
+      rm -f <%= p("socket") %>
+    <% end %>
 
     ;;
 
