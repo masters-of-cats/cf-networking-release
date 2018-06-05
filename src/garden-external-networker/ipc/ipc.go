@@ -8,6 +8,7 @@ import (
 	"garden-external-networker/manager"
 	"io"
 	"net"
+	"os"
 
 	"code.cloudfoundry.org/netplugin-shim/message"
 
@@ -59,17 +60,20 @@ func (m *Mux) HandleWithSocket(socketPath string) error {
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			return err
+			sendError(conn, err)
+			continue
 		}
 
 		fd, err := getFD(conn)
 		if err != nil {
-			return err
+			sendError(conn, err)
+			continue
 		}
 
 		msg, err := decodeMsg(conn)
 		if err != nil {
-			panic(err)
+			sendError(conn, err)
+			continue
 		}
 
 		jsonMessage, err := json.Marshal(struct {
@@ -80,14 +84,34 @@ func (m *Mux) HandleWithSocket(socketPath string) error {
 			NetNsFd: fd,
 		})
 		if err != nil {
-			panic(err)
+			sendError(conn, err)
+			continue
 		}
 
 		stdIn := bytes.NewReader(jsonMessage)
+		if err := m.Handle(msg.Command, msg.Handle, stdIn, conn); err != nil {
+			sendError(conn, err)
+			continue
+		}
 
-		m.Handle(msg.Command, msg.Handle, stdIn, conn)
+		if msg.Command == "down" {
+			if _, err := conn.Write([]byte("{}")); err != nil {
+				sendError(conn, err)
+				continue
+			}
+		}
 
 		conn.Close()
+	}
+}
+
+func sendError(writer io.Writer, err error) {
+	result := map[string]interface{}{
+		"Error": err,
+	}
+
+	if err := json.NewEncoder(writer).Encode(result); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to send error: %s", err.Error())
 	}
 }
 
