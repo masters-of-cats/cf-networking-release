@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 
 	"code.cloudfoundry.org/garden"
@@ -72,11 +71,7 @@ func (m *Manager) Up(containerHandle string, inputs UpInputs) (*UpOutputs, error
 	if inputs.Pid != 0 {
 		procNsPath = fmt.Sprintf("/proc/%d/ns/net", inputs.Pid)
 	} else if inputs.NetNsFd != 0 {
-		var err error
-		procNsPath, err = os.Readlink(fmt.Sprintf("/proc/self/fd/%d", inputs.NetNsFd))
-		if err != nil {
-			return nil, errors.New("cannot read from fd to net ns of container")
-		}
+		procNsPath = fmt.Sprintf("/proc/self/fd/%d", inputs.NetNsFd)
 	} else {
 		return nil, errors.New("up missing pid and file descriptor to net ns")
 	}
