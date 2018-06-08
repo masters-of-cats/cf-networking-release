@@ -2,9 +2,17 @@ package ipc
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"garden-external-networker/manager"
 	"io"
+	"net"
+	"os"
+	"os/signal"
+	"syscall"
+
+	"code.cloudfoundry.org/netplugin-shim/message"
+	"golang.org/x/sys/unix"
 )
 
 type Mux struct {
@@ -39,4 +47,156 @@ func (m *Mux) Handle(action string, handle string, stdin io.Reader, stdout io.Wr
 		return fmt.Errorf("unrecognized action: %s", action)
 	}
 	return nil
+}
+
+func (m *Mux) HandleWithSocket(logger io.Writer, socketPath string) error {
+	fmt.Fprint(logger, "handle with socket")
+	listener, err := net.Listen("unix", socketPath)
+	if err != nil {
+		return err
+	}
+	closeOnInterrupt(logger, listener)
+
+	for {
+		connection, err := listener.Accept()
+		if err != nil {
+			fmt.Fprintf(logger, "Failed to accept connection: %s", err.Error())
+			continue
+		}
+
+		_, err = readNsFileDescriptor(connection)
+		if err != nil {
+			sendError(connection, err)
+			continue
+		}
+
+		msg, err := decodeMsg(connection)
+		if err != nil {
+			sendError(connection, err)
+			continue
+		}
+
+		if msg.Command == "up" {
+			response := `{
+			"properties": {
+				"garden.network.container-ip": "169.254.1.2",
+				"garden.network.host-ip": "255.255.255.255",
+				"garden.network.mapped-ports": "[{\"HostPort\":12345,\"ContainerPort\":7000},{\"HostPort\":60000,\"ContainerPort\":7000}]"
+			},
+			"dns_servers": [
+				"1.2.3.4"
+			],
+			"search_domains": [
+				"pivotal.io",
+				"foo.bar",
+				"baz.me"
+			]
+		}`
+
+			connection.Write([]byte(response))
+		}
+
+		if err := connection.Close(); err != nil {
+			fmt.Fprintf(logger, "Failed to close the connection: %s", err.Error())
+		}
+	}
+
+}
+
+// TODO: Proper send error testing
+func sendError(writer io.Writer, err error) {
+}
+
+func readNsFileDescriptor(conn net.Conn) (uintptr, error) {
+	unixconn, ok := conn.(*net.UnixConn)
+	if !ok {
+		return 0, errors.New("failed to cast connection to unixconn")
+	}
+
+	return recvFD(unixconn)
+}
+
+func recvFD(conn *net.UnixConn) (uintptr, error) {
+	controlMessageBytesSpace := unix.CmsgSpace(4)
+
+	controlMessageBytes := make([]byte, controlMessageBytesSpace)
+	_, readSocketControlMessageBytes, _, _, err := conn.ReadMsgUnix(nil, controlMessageBytes)
+	if err != nil {
+		return 0, err
+	}
+
+	if readSocketControlMessageBytes > controlMessageBytesSpace {
+		return 0, errors.New("received too many things")
+	}
+
+	controlMessageBytes = controlMessageBytes[:readSocketControlMessageBytes]
+
+	socketControlMessages, err := parseSocketControlMessage(controlMessageBytes)
+	if err != nil {
+		return 0, err
+	}
+
+	fds, err := parseUnixRights(&socketControlMessages[0])
+	if err != nil {
+		return 0, err
+	}
+
+	return uintptr(fds[0]), nil
+}
+
+func decodeMsg(r io.Reader) (message.Message, error) {
+	var content message.Message
+	decoder := json.NewDecoder(r)
+	if err := decoder.Decode(&content); err != nil {
+		return message.Message{}, err
+	}
+	return content, nil
+}
+
+func parseUnixRights(m *unix.SocketControlMessage) ([]int, error) {
+	messages, err := unix.ParseUnixRights(m)
+	if err != nil {
+		return nil, err
+	}
+	if len(messages) != 1 {
+		return nil, errors.New("no messages parsed")
+	}
+	return messages, nil
+}
+
+func parseSocketControlMessage(b []byte) ([]unix.SocketControlMessage, error) {
+	messages, err := unix.ParseSocketControlMessage(b)
+	if err != nil {
+		return nil, err
+	}
+	if len(messages) != 1 {
+		return nil, errors.New("no messages parsed")
+	}
+	return messages, nil
+}
+
+func onInterrupt(f func()) {
+	signalChannel := make(chan os.Signal, 1)
+	signal.Notify(signalChannel, syscall.SIGTERM, syscall.SIGINT)
+	go func() {
+		<-signalChannel
+		f()
+		os.Exit(0)
+	}()
+}
+
+func closeOnInterrupt(logger io.Writer, closer io.Closer) {
+	onInterrupt(func() {
+		if err := closer.Close(); err != nil {
+			fmt.Fprintln(logger, err)
+		}
+	})
+}
+
+type SocketRequestErrorHandler interface {
+	HandleError(writer io.Writer, err error)
+}
+
+type ReadFileDescriptorFromConnection interface {
+	ReadNsFileDescriptor(conn net.Conn) (uintptr, error)
 }
