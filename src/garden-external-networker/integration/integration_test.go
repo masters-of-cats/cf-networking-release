@@ -397,6 +397,51 @@ var _ = Describe("Garden External Networker", func() {
 
 		})
 	})
+
+	Context("when run as a daemon", func() {
+		var (
+			tmpDir     string
+			socketPath string
+			session    *gexec.Session
+			exitChan   chan int
+		)
+
+		BeforeEach(func() {
+			var err error
+
+			tmpDir, err = ioutil.TempDir("", "")
+			Expect(err).NotTo(HaveOccurred())
+			socketPath = filepath.Join(tmpDir, "test-garden-external-networker.sock")
+
+			exitChan = make(chan int, 1)
+
+			// TODO: rename this?
+			upCommand = exec.Command(paths.PathToAdapter, "-socket", socketPath)
+
+			go func() {
+				defer GinkgoRecover()
+
+				session, err = gexec.Start(upCommand, GinkgoWriter, GinkgoWriter)
+				Expect(err).NotTo(HaveOccurred())
+
+				exitCode := session.Wait().ExitCode()
+				exitChan <- exitCode
+			}()
+		})
+
+		AfterEach(func() {
+			session.Kill()
+			exitCode := <-exitChan
+			Expect(exitCode).To(Equal(0))
+
+			Expect(os.RemoveAll(tmpDir)).To(Succeed())
+		})
+
+		FIt("listens on a unix socket at the provided path", func() {
+			// _, err := net.Dial("unix", socketPath)
+			// Expect(err).NotTo(HaveOccurred())
+		})
+	})
 })
 
 func runAndWait(cmd *exec.Cmd) *gexec.Session {
