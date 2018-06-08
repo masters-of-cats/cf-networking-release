@@ -7,16 +7,19 @@ import (
 	"io"
 	"io/ioutil"
 	"math/rand"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 
+	"code.cloudfoundry.org/netplugin-shim/message"
 	"github.com/containernetworking/plugins/pkg/ns"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
+	"golang.org/x/sys/unix"
 )
 
 type fakePluginLogData struct {
@@ -400,10 +403,10 @@ var _ = Describe("Garden External Networker", func() {
 
 	Context("when run as a daemon", func() {
 		var (
-			tmpDir     string
-			socketPath string
-			session    *gexec.Session
-			exitChan   chan int
+			tmpDir             string
+			socketPath         string
+			session            *gexec.Session
+			startDaemonCommand *exec.Cmd
 		)
 
 		BeforeEach(func() {
@@ -413,33 +416,125 @@ var _ = Describe("Garden External Networker", func() {
 			Expect(err).NotTo(HaveOccurred())
 			socketPath = filepath.Join(tmpDir, "test-garden-external-networker.sock")
 
-			exitChan = make(chan int, 1)
-
 			// TODO: rename this?
-			upCommand = exec.Command(paths.PathToAdapter, "-socket", socketPath)
+			startDaemonCommand = exec.Command(paths.PathToAdapter, "-socket", socketPath, "-configFile", fakeConfigFilePath)
 
 			go func() {
 				defer GinkgoRecover()
 
-				session, err = gexec.Start(upCommand, GinkgoWriter, GinkgoWriter)
+				var err error
+				session, err = gexec.Start(startDaemonCommand, GinkgoWriter, GinkgoWriter)
 				Expect(err).NotTo(HaveOccurred())
-
-				exitCode := session.Wait().ExitCode()
-				exitChan <- exitCode
 			}()
+
+			Eventually(socketPath).Should(BeAnExistingFile())
+
 		})
 
 		AfterEach(func() {
 			session.Kill()
-			exitCode := <-exitChan
-			Expect(exitCode).To(Equal(0))
-
 			Expect(os.RemoveAll(tmpDir)).To(Succeed())
 		})
 
-		FIt("listens on a unix socket at the provided path", func() {
-			// _, err := net.Dial("unix", socketPath)
-			// Expect(err).NotTo(HaveOccurred())
+		FIt("listens for a connection at the socket path", func() {
+			_, err := net.Dial("unix", socketPath)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		FIt("deletes the socket on exit", func() {
+			session.Interrupt()
+			Eventually(session, DEFAULT_TIMEOUT).Should(gexec.Exit())
+			Expect(socketPath).NotTo(BeAnExistingFile())
+		})
+
+		FIt("returns the network configuration on up", func() {
+			connection, err := net.Dial("unix", socketPath)
+			Expect(err).NotTo(HaveOccurred())
+
+			fakeShim := FakeShim{
+				connection:     connection,
+				containerNetNS: containerNetNS,
+			}
+
+			data, err := json.Marshal(map[string]interface{}{
+				"netin": []map[string]int{
+					{
+						"host_port":      12345,
+						"container_port": 7000,
+					},
+				},
+				"netout_rules": []map[string]interface{}{
+					{
+						"protocol": 1,
+						"networks": []map[string]string{
+							{
+								"start": "8.8.8.8",
+								"end":   "9.9.9.9",
+							},
+						},
+						"ports": []map[string]int{
+							{
+								"start": 53,
+								"end":   54,
+							},
+						},
+						"log": true,
+					},
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			upMessage := message.Message{
+				Command: "up",
+				Handle:  "cake",
+				Data:    string(data),
+			}
+			fakeShim.sendSocketMessage(upMessage)
+
+			response, err := ioutil.ReadAll(connection)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(string(response)).To(MatchJSON(`{
+			"properties": {
+				"garden.network.container-ip": "169.254.1.2",
+				"garden.network.host-ip": "255.255.255.255",
+				"garden.network.mapped-ports": "[{\"HostPort\":12345,\"ContainerPort\":7000},{\"HostPort\":60000,\"ContainerPort\":7000}]"
+			},
+			"dns_servers": [
+				"1.2.3.4"
+			],
+			"search_domains": [
+				"pivotal.io",
+				"foo.bar",
+				"baz.me"
+			]
+		}`))
+		})
+
+		FIt("returns nothing on successfull down", func() {
+			connection, err := net.Dial("unix", socketPath)
+			Expect(err).NotTo(HaveOccurred())
+
+			fakeShim := FakeShim{
+				connection:     connection,
+				containerNetNS: containerNetNS,
+			}
+
+			downMessage := message.Message{
+				Command: "down",
+				Handle:  "cake",
+				Data:    "",
+			}
+			fakeShim.sendSocketMessage(downMessage)
+
+			response, err := ioutil.ReadAll(connection)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(string(response)).To(Equal(""))
+		})
+
+		PIt("fails when sending up for the same container twice", func() {
+			//TODO
 		})
 	})
 })
@@ -459,4 +554,19 @@ func createNetworkNamespace() ns.NetNS {
 
 func removeNetworkNamespace(containerNetNs ns.NetNS) {
 	Expect(containerNetNs.Close()).To(Succeed())
+}
+
+type FakeShim struct {
+	containerNetNS ns.NetNS
+	connection     net.Conn
+}
+
+func (f *FakeShim) sendSocketMessage(msg message.Message) {
+	socketControlMessage := unix.UnixRights(int(f.containerNetNS.Fd()))
+	socket := f.connection.(*net.UnixConn)
+	_, _, err := socket.WriteMsgUnix(nil, socketControlMessage, nil)
+	Expect(err).NotTo(HaveOccurred())
+
+	encoder := json.NewEncoder(f.connection)
+	Expect(encoder.Encode(msg)).To(Succeed())
 }
