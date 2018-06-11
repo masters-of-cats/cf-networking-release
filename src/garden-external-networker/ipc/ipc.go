@@ -2,7 +2,6 @@ package ipc
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"garden-external-networker/manager"
 	"io"
@@ -12,12 +11,31 @@ import (
 	"syscall"
 
 	"code.cloudfoundry.org/netplugin-shim/message"
-	"golang.org/x/sys/unix"
 )
 
+//go:generate counterfeiter . SocketManager
+type SocketManager interface {
+	ReadFileDescriptor(net.Conn) (uintptr, error)
+	ReadMessage(io.Reader) (message.Message, error)
+}
+
+type upFunction func(handle string, inputs manager.UpInputs) (*manager.UpOutputs, error)
+type downFunction func(handle string) error
+
 type Mux struct {
-	Up   func(handle string, inputs manager.UpInputs) (*manager.UpOutputs, error)
-	Down func(handle string) error
+	Up            upFunction
+	Down          downFunction
+	SocketManager SocketManager
+	KillChannel   chan os.Signal
+}
+
+func NewMux(up upFunction, down downFunction) *Mux {
+	return &Mux{
+		SocketManager: new(UnixSocketManager),
+		Up:            up,
+		Down:          down,
+		KillChannel:   make(chan os.Signal, 1),
+	}
 }
 
 func (m *Mux) Handle(action string, handle string, stdin io.Reader, stdout io.Writer) error {
@@ -55,7 +73,7 @@ func (m *Mux) HandleWithSocket(logger io.Writer, socketPath string) error {
 	if err != nil {
 		return err
 	}
-	closeOnInterrupt(logger, listener)
+	closeOnKill(logger, listener, m.KillChannel)
 
 	for {
 		connection, err := listener.Accept()
@@ -64,13 +82,13 @@ func (m *Mux) HandleWithSocket(logger io.Writer, socketPath string) error {
 			continue
 		}
 
-		_, err = readNsFileDescriptor(connection)
+		_, err = m.SocketManager.ReadFileDescriptor(connection)
 		if err != nil {
 			sendError(connection, err)
 			continue
 		}
 
-		msg, err := decodeMsg(connection)
+		msg, err := m.SocketManager.ReadMessage(connection)
 		if err != nil {
 			sendError(connection, err)
 			continue
@@ -107,96 +125,17 @@ func (m *Mux) HandleWithSocket(logger io.Writer, socketPath string) error {
 func sendError(writer io.Writer, err error) {
 }
 
-func readNsFileDescriptor(conn net.Conn) (uintptr, error) {
-	unixconn, ok := conn.(*net.UnixConn)
-	if !ok {
-		return 0, errors.New("failed to cast connection to unixconn")
-	}
-
-	return recvFD(unixconn)
-}
-
-func recvFD(conn *net.UnixConn) (uintptr, error) {
-	controlMessageBytesSpace := unix.CmsgSpace(4)
-
-	controlMessageBytes := make([]byte, controlMessageBytesSpace)
-	_, readSocketControlMessageBytes, _, _, err := conn.ReadMsgUnix(nil, controlMessageBytes)
-	if err != nil {
-		return 0, err
-	}
-
-	if readSocketControlMessageBytes > controlMessageBytesSpace {
-		return 0, errors.New("received too many things")
-	}
-
-	controlMessageBytes = controlMessageBytes[:readSocketControlMessageBytes]
-
-	socketControlMessages, err := parseSocketControlMessage(controlMessageBytes)
-	if err != nil {
-		return 0, err
-	}
-
-	fds, err := parseUnixRights(&socketControlMessages[0])
-	if err != nil {
-		return 0, err
-	}
-
-	return uintptr(fds[0]), nil
-}
-
-func decodeMsg(r io.Reader) (message.Message, error) {
-	var content message.Message
-	decoder := json.NewDecoder(r)
-	if err := decoder.Decode(&content); err != nil {
-		return message.Message{}, err
-	}
-	return content, nil
-}
-
-func parseUnixRights(m *unix.SocketControlMessage) ([]int, error) {
-	messages, err := unix.ParseUnixRights(m)
-	if err != nil {
-		return nil, err
-	}
-	if len(messages) != 1 {
-		return nil, errors.New("no messages parsed")
-	}
-	return messages, nil
-}
-
-func parseSocketControlMessage(b []byte) ([]unix.SocketControlMessage, error) {
-	messages, err := unix.ParseSocketControlMessage(b)
-	if err != nil {
-		return nil, err
-	}
-	if len(messages) != 1 {
-		return nil, errors.New("no messages parsed")
-	}
-	return messages, nil
-}
-
-func onInterrupt(f func()) {
-	signalChannel := make(chan os.Signal, 1)
+func closeOnKill(logger io.Writer, closer io.Closer, signalChannel chan os.Signal) {
 	signal.Notify(signalChannel, syscall.SIGTERM, syscall.SIGINT)
 	go func() {
 		<-signalChannel
-		f()
+		if err := closer.Close(); err != nil {
+			fmt.Fprintln(logger, err)
+		}
 		os.Exit(0)
 	}()
 }
 
-func closeOnInterrupt(logger io.Writer, closer io.Closer) {
-	onInterrupt(func() {
-		if err := closer.Close(); err != nil {
-			fmt.Fprintln(logger, err)
-		}
-	})
-}
-
 type SocketRequestErrorHandler interface {
 	HandleError(writer io.Writer, err error)
-}
-
-type ReadFileDescriptorFromConnection interface {
-	ReadNsFileDescriptor(conn net.Conn) (uintptr, error)
 }

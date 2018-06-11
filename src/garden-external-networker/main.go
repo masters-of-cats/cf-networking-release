@@ -157,10 +157,7 @@ func mainWithError(logger io.Writer) error {
 		SearchDomains: cfg.SearchDomains,
 	}
 
-	mux := ipc.Mux{
-		Up:   manager.Up,
-		Down: manager.Down,
-	}
+	mux := ipc.NewMux(manager.Up, manager.Down)
 
 	if socketPath != "" {
 		return mux.HandleWithSocket(logger, socketPath)
