@@ -44,6 +44,8 @@ func main() {
 		log.Fatalf("error reading stdin bytes: %s", err)
 	}
 
+	// fmt.Fprintln(os.Stderr, string(stdin))
+
 	env, err := parseEnviron(os.Environ())
 	if err != nil {
 		log.Fatalf("unable to parse environment: %s", err)

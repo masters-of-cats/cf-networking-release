@@ -56,7 +56,7 @@ func (m *Mux) HandleWithSocket(logger io.Writer, socketPath string) error {
 	if err != nil {
 		return err
 	}
-	closeOnInterrupt(logger, listener)
+	defer listener.Close()
 
 	for {
 		connection, err := listener.Accept()
@@ -65,27 +65,24 @@ func (m *Mux) HandleWithSocket(logger io.Writer, socketPath string) error {
 			continue
 		}
 
-		_, err = readNsFileDescriptor(connection)
-		if err != nil {
-			sendError(connection, err)
+		if _, readErr := readNsFileDescriptor(connection); readErr != nil {
+			fmt.Println(err)
 			continue
 		}
 
 		msg, err := decodeMsg(connection)
 		if err != nil {
-			sendError(connection, err)
+			fmt.Println(err)
 			continue
 		}
 
-		err = m.Handle(string(msg.Command), string(msg.Handle), bytes.NewBuffer(msg.Data), connection)
+		fmt.Println("msg.Data:", string(msg.Data))
+		if err := m.Handle(string(msg.Command), string(msg.Handle), bytes.NewBuffer(msg.Data), connection); err != nil {
+			fmt.Println(err)
+			continue
+		}
 		connection.Close()
-		return err
 	}
-
-}
-
-// TODO: Proper send error testing
-func sendError(writer io.Writer, err error) {
 }
 
 func readNsFileDescriptor(conn net.Conn) (uintptr, error) {

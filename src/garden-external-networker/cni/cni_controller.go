@@ -64,6 +64,7 @@ func (c *CNIController) Down(namespacePath, handle string) error {
 		IfName:      "eth0",
 	}
 
+	fmt.Println("deleting network list")
 	err = c.CNIConfig.DelNetworkList(c.NetworkConfigList, runtimeConfig)
 
 	if err != nil {

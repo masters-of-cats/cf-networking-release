@@ -61,3 +61,9 @@ var _ = SynchronizedAfterSuite(func() {}, func() {
 	gexec.CleanupBuildArtifacts()
 	Expect(os.RemoveAll(paths.CniPluginDir)).To(Succeed())
 })
+
+func readFile(filename string) []byte {
+	content, err := ioutil.ReadFile(filename)
+	ExpectWithOffset(1, err).NotTo(HaveOccurred())
+	return content
+}
