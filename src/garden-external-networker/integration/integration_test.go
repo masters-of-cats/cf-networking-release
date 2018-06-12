@@ -403,10 +403,9 @@ var _ = Describe("Garden External Networker", func() {
 
 	Context("when run as a daemon", func() {
 		var (
-			tmpDir             string
-			socketPath         string
-			session            *gexec.Session
-			startDaemonCommand *exec.Cmd
+			tmpDir     string
+			socketPath string
+			session    *gexec.Session
 		)
 
 		BeforeEach(func() {
@@ -416,19 +415,12 @@ var _ = Describe("Garden External Networker", func() {
 			Expect(err).NotTo(HaveOccurred())
 			socketPath = filepath.Join(tmpDir, "test-garden-external-networker.sock")
 
-			// TODO: rename this?
-			startDaemonCommand = exec.Command(paths.PathToAdapter, "-socket", socketPath, "-configFile", fakeConfigFilePath)
+			upCommand.Args = append(upCommand.Args, "--socket", socketPath)
 
-			go func() {
-				defer GinkgoRecover()
-
-				var err error
-				session, err = gexec.Start(startDaemonCommand, GinkgoWriter, GinkgoWriter)
-				Expect(err).NotTo(HaveOccurred())
-			}()
+			session, err = gexec.Start(upCommand, GinkgoWriter, GinkgoWriter)
+			Expect(err).NotTo(HaveOccurred())
 
 			Eventually(socketPath).Should(BeAnExistingFile())
-
 		})
 
 		AfterEach(func() {
@@ -436,18 +428,8 @@ var _ = Describe("Garden External Networker", func() {
 			Expect(os.RemoveAll(tmpDir)).To(Succeed())
 		})
 
-		FIt("listens for a connection at the socket path", func() {
-			_, err := net.Dial("unix", socketPath)
-			Expect(err).NotTo(HaveOccurred())
-		})
-
-		FIt("deletes the socket on exit", func() {
-			session.Interrupt()
-			Eventually(session, DEFAULT_TIMEOUT).Should(gexec.Exit())
-			Expect(socketPath).NotTo(BeAnExistingFile())
-		})
-
-		FIt("returns the network configuration on up", func() {
+		It("should call CNI ADD and DEL", func() {
+			By("calling up")
 			connection, err := net.Dial("unix", socketPath)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -457,9 +439,14 @@ var _ = Describe("Garden External Networker", func() {
 			}
 
 			data, err := json.Marshal(map[string]interface{}{
+				"pid": fakePid,
 				"netin": []map[string]int{
 					{
 						"host_port":      12345,
+						"container_port": 7000,
+					},
+					{
+						"host_port":      60000,
 						"container_port": 7000,
 					},
 				},
@@ -481,60 +468,93 @@ var _ = Describe("Garden External Networker", func() {
 						"log": true,
 					},
 				},
+				"properties": map[string]interface{}{
+					"some-key":        "some-value",
+					"policy_group_id": "some-group-id",
+				},
 			})
 			Expect(err).NotTo(HaveOccurred())
 
 			upMessage := message.Message{
-				Command: "up",
-				Handle:  "cake",
-				Data:    string(data),
+				Command: []byte("up"),
+				Handle:  []byte(containerHandle),
+				Data:    data,
 			}
 			fakeShim.sendSocketMessage(upMessage)
 
-			response, err := ioutil.ReadAll(connection)
+			decoder := json.NewDecoder(connection)
+			response := make(map[string]interface{})
+			Expect(decoder.Decode(&response)).To(Succeed())
+			data, err = json.Marshal(response)
 			Expect(err).NotTo(HaveOccurred())
+			Expect(data).To(MatchJSON(`{
+				"dns_servers": [
+					"1.2.3.4"
+				],
+				"properties": {
+					"garden.network.container-ip": "169.254.1.2",
+					"garden.network.host-ip": "255.255.255.255",
+					"garden.network.mapped-ports": "[{\"HostPort\":12345,\"ContainerPort\":7000},{\"HostPort\":60000,\"ContainerPort\":7000}]"
+				},
+				"search_domains": [
+					"pivotal.io",
+					"foo.bar",
+					"baz.me"
+				]
+			}`))
 
-			Expect(string(response)).To(MatchJSON(`{
-			"properties": {
-				"garden.network.container-ip": "169.254.1.2",
-				"garden.network.host-ip": "255.255.255.255",
-				"garden.network.mapped-ports": "[{\"HostPort\":12345,\"ContainerPort\":7000},{\"HostPort\":60000,\"ContainerPort\":7000}]"
-			},
-			"dns_servers": [
-				"1.2.3.4"
-			],
-			"search_domains": [
-				"pivotal.io",
-				"foo.bar",
-				"baz.me"
-			]
-		}`))
-		})
-
-		FIt("returns nothing on successfull down", func() {
-			connection, err := net.Dial("unix", socketPath)
+			By("checking that the first CNI plugin in the plugin directory got called with ADD")
+			Eventually(filepath.Join(fakeLogDir, "plugin-0.log")).Should(BeAnExistingFile())
+			logFileContents, err := ioutil.ReadFile(filepath.Join(fakeLogDir, "plugin-0.log"))
 			Expect(err).NotTo(HaveOccurred())
+			var pluginCallInfo fakePluginLogData
+			Expect(json.Unmarshal(logFileContents, &pluginCallInfo)).To(Succeed())
 
-			fakeShim := FakeShim{
-				connection:     connection,
-				containerNetNS: containerNetNS,
+			Expect(pluginCallInfo.Stdin).To(MatchJSON(expectedStdin_CNI_ADD(0)))
+			Expect(pluginCallInfo.Env).To(HaveKeyWithValue("CNI_COMMAND", "ADD"))
+			Expect(pluginCallInfo.Env).To(HaveKeyWithValue("CNI_CONTAINERID", containerHandle))
+			Expect(pluginCallInfo.Env).To(HaveKeyWithValue("CNI_IFNAME", "eth0"))
+			Expect(pluginCallInfo.Env).To(HaveKeyWithValue("CNI_PATH", paths.CniPluginDir))
+			Expect(pluginCallInfo.Env).To(HaveKeyWithValue("CNI_NETNS", expectedNetNSPath))
+			Expect(pluginCallInfo.Env).To(HaveKeyWithValue("CNI_ARGS", ""))
+
+			if runtime.GOOS != "windows" {
+				By("checking that the fake process's network namespace has been bind-mounted into the filesystem")
+				Expect(sameFile(expectedNetNSPath, fmt.Sprintf("/proc/%d/ns/net", fakePid))).To(BeTrue())
 			}
 
-			downMessage := message.Message{
-				Command: "down",
-				Handle:  "cake",
-				Data:    "",
-			}
-			fakeShim.sendSocketMessage(downMessage)
+			By("calling down")
+			runAndWait(downCommand)
 
-			response, err := ioutil.ReadAll(connection)
+			By("checking that the first CNI plugin in the plugin directory got called with DEL")
+			logFileContents, err = ioutil.ReadFile(filepath.Join(fakeLogDir, "plugin-0.log"))
 			Expect(err).NotTo(HaveOccurred())
+			Expect(json.Unmarshal(logFileContents, &pluginCallInfo)).To(Succeed())
 
-			Expect(string(response)).To(Equal(""))
-		})
+			Expect(pluginCallInfo.Stdin).To(MatchJSON(expectedStdin_CNI_DEL(0)))
+			Expect(pluginCallInfo.Env).To(HaveKeyWithValue("CNI_COMMAND", "DEL"))
+			Expect(pluginCallInfo.Env).To(HaveKeyWithValue("CNI_CONTAINERID", containerHandle))
+			Expect(pluginCallInfo.Env).To(HaveKeyWithValue("CNI_IFNAME", "eth0"))
+			Expect(pluginCallInfo.Env).To(HaveKeyWithValue("CNI_PATH", paths.CniPluginDir))
+			Expect(pluginCallInfo.Env).To(HaveKeyWithValue("CNI_NETNS", expectedNetNSPath))
+			Expect(pluginCallInfo.Env).To(HaveKeyWithValue("CNI_ARGS", ""))
 
-		PIt("fails when sending up for the same container twice", func() {
-			//TODO
+			if runtime.GOOS != "windows" {
+				By("checking that the bind-mounted namespace has been removed")
+				Expect(expectedNetNSPath).NotTo(BeAnExistingFile())
+			}
+
+			By("seeing that is succeeds when calling down again")
+			downCommand2 := exec.Command(paths.PathToAdapter)
+			downCommand2.Env = append(os.Environ(), "FAKE_LOG_DIR="+fakeLogDir)
+			downCommand2.Stdin = strings.NewReader(`{}`)
+			downCommand2.Args = []string{
+				paths.PathToAdapter,
+				"--action", "down",
+				"--handle", containerHandle,
+				"--configFile", fakeConfigFilePath,
+			}
+			runAndWait(downCommand2)
 		})
 	})
 })

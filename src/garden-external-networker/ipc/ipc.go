@@ -1,6 +1,7 @@
 package ipc
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -76,29 +77,9 @@ func (m *Mux) HandleWithSocket(logger io.Writer, socketPath string) error {
 			continue
 		}
 
-		if msg.Command == "up" {
-			response := `{
-			"properties": {
-				"garden.network.container-ip": "169.254.1.2",
-				"garden.network.host-ip": "255.255.255.255",
-				"garden.network.mapped-ports": "[{\"HostPort\":12345,\"ContainerPort\":7000},{\"HostPort\":60000,\"ContainerPort\":7000}]"
-			},
-			"dns_servers": [
-				"1.2.3.4"
-			],
-			"search_domains": [
-				"pivotal.io",
-				"foo.bar",
-				"baz.me"
-			]
-		}`
-
-			connection.Write([]byte(response))
-		}
-
-		if err := connection.Close(); err != nil {
-			fmt.Fprintf(logger, "Failed to close the connection: %s", err.Error())
-		}
+		err = m.Handle(string(msg.Command), string(msg.Handle), bytes.NewBuffer(msg.Data), connection)
+		connection.Close()
+		return err
 	}
 
 }
