@@ -1,0 +1,7 @@
+<% if p("bpm.enabled") %>
+check process server
+  with pidfile /var/vcap/sys/run/bpm/garden-cni/server.pid
+  start program "/var/vcap/jobs/bpm/bin/bpm start garden-cni"
+  stop program "/var/vcap/jobs/bpm/bin/bpm stop garden-cni"
+  group vcap
+<% end %>

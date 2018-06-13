@@ -1,0 +1,8 @@
+processes:
+- name: garden-cni
+  executable: /var/vcap/packages/runc-cni/bin/garden-external-networker
+  args:
+  - --configFile
+  - /var/vcap/jobs/garden-cni/config/adapter.json
+  - --socket
+  - /var/vcap/sys/run/garden/networker.sock
