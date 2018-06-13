@@ -44,6 +44,7 @@ func (m *Mux) Handle(action string, handle string, stdin io.Reader, stdout io.Wr
 		if err != nil {
 			return err
 		}
+		io.WriteString(stdout, "{}")
 	default:
 		return fmt.Errorf("unrecognized action: %s", action)
 	}
@@ -59,30 +60,30 @@ func (m *Mux) HandleWithSocket(logger io.Writer, socketPath string) error {
 	defer listener.Close()
 
 	for {
-		connection, err := listener.Accept()
-		if err != nil {
-			fmt.Fprintf(logger, "Failed to accept connection: %s", err.Error())
+		if err := m.handleOne(listener); err != nil {
+			fmt.Fprintf(logger, "%v", err)
 			continue
 		}
-
-		if _, readErr := readNsFileDescriptor(connection); readErr != nil {
-			fmt.Println(err)
-			continue
-		}
-
-		msg, err := decodeMsg(connection)
-		if err != nil {
-			fmt.Println(err)
-			continue
-		}
-
-		fmt.Println("msg.Data:", string(msg.Data))
-		if err := m.Handle(string(msg.Command), string(msg.Handle), bytes.NewBuffer(msg.Data), connection); err != nil {
-			fmt.Println(err)
-			continue
-		}
-		connection.Close()
 	}
+}
+
+func (m *Mux) handleOne(listener net.Listener) error {
+	connection, err := listener.Accept()
+	if err != nil {
+		return err
+	}
+	defer connection.Close()
+
+	if _, err = readNsFileDescriptor(connection); err != nil {
+		return err
+	}
+
+	msg, err := decodeMsg(connection)
+	if err != nil {
+		return err
+	}
+
+	return m.Handle(string(msg.Command), string(msg.Handle), bytes.NewBuffer(msg.Data), connection)
 }
 
 func readNsFileDescriptor(conn net.Conn) (uintptr, error) {

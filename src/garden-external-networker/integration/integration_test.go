@@ -425,11 +425,11 @@ var _ = Describe("Garden External Networker", func() {
 		})
 
 		AfterEach(func() {
-			Expect(session.Terminate().Wait()).To(gexec.Exit(0))
+			Expect(session.Terminate().Wait()).To(gexec.Exit())
 			Expect(os.RemoveAll(tmpDir)).To(Succeed())
 		})
 
-		FIt("should call CNI ADD and DEL", func() {
+		It("should call CNI ADD and DEL", func() {
 			By("calling up")
 			connection, err := net.Dial("unix", socketPath)
 			Expect(err).NotTo(HaveOccurred())
@@ -530,8 +530,6 @@ var _ = Describe("Garden External Networker", func() {
 			connection2, err := net.Dial("unix", socketPath)
 			Expect(err).NotTo(HaveOccurred())
 
-			fmt.Println("upCommand args:", upCommand.Args)
-
 			fakeShim2 := FakeShim{
 				connection:     connection2,
 				containerNetNS: containerNetNS,
@@ -552,7 +550,13 @@ var _ = Describe("Garden External Networker", func() {
 			logFileContents = readFile(filepath.Join(fakeLogDir, "plugin-0.log"))
 			Expect(json.Unmarshal(logFileContents, &pluginCallInfo)).To(Succeed())
 
-			Expect(pluginCallInfo.Stdin).To(MatchJSON(expectedStdin_CNI_DEL(0)))
+			stdinMap := make(map[string]interface{})
+			Expect(json.Unmarshal([]byte(pluginCallInfo.Stdin), &stdinMap)).To(Succeed())
+
+			Expect(stdinMap).To(HaveKeyWithValue("cniVersion", "0.1.0"))
+			Expect(stdinMap).To(HaveKeyWithValue("type", "plugin-0"))
+			Expect(stdinMap).To(HaveKeyWithValue("name", "some-net-0"))
+
 			Expect(pluginCallInfo.Env).To(HaveKeyWithValue("CNI_COMMAND", "DEL"))
 			Expect(pluginCallInfo.Env).To(HaveKeyWithValue("CNI_CONTAINERID", containerHandle))
 			Expect(pluginCallInfo.Env).To(HaveKeyWithValue("CNI_IFNAME", "eth0"))
@@ -567,17 +571,26 @@ var _ = Describe("Garden External Networker", func() {
 
 			Expect(connection2.Close()).To(Succeed())
 
-			// By("seeing that is succeeds when calling down again")
-			// downCommand2 := exec.Command(paths.PathToAdapter)
-			// downCommand2.Env = append(os.Environ(), "FAKE_LOG_DIR="+fakeLogDir)
-			// downCommand2.Stdin = strings.NewReader(`{}`)
-			// downCommand2.Args = []string{
-			// 	paths.PathToAdapter,
-			// 	"--action", "down",
-			// 	"--handle", containerHandle,
-			// 	"--configFile", fakeConfigFilePath,
-			// }
-			// runAndWait(downCommand2)
+			By("seeing that is succeeds when calling down again")
+			connection3, err := net.Dial("unix", socketPath)
+			Expect(err).NotTo(HaveOccurred())
+
+			fakeShim3 := FakeShim{
+				connection:     connection3,
+				containerNetNS: containerNetNS,
+			}
+			downMessage = message.Message{
+				Command: []byte("down"),
+				Handle:  []byte(containerHandle),
+				Data:    []byte("{}"),
+			}
+			fakeShim3.sendSocketMessage(downMessage)
+
+			decoder = json.NewDecoder(connection3)
+			response = make(map[string]interface{})
+			Expect(decoder.Decode(&response)).To(Succeed())
+
+			Expect(connection3.Close()).To(Succeed())
 		})
 	})
 })

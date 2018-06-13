@@ -132,7 +132,6 @@ func (m *Manager) Up(containerHandle string, inputs UpInputs) (*UpOutputs, error
 }
 
 func (m *Manager) Down(containerHandle string) error {
-	fmt.Println("doing down")
 	if containerHandle == "" {
 		return errors.New("down missing container handle")
 	}
