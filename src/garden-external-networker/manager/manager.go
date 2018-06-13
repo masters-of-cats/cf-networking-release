@@ -61,7 +61,7 @@ type UpOutputs struct {
 	SearchDomains []string `json:"search_domains,omitempty"`
 }
 
-func (m *Manager) Up(containerHandle string, inputs UpInputs) (*UpOutputs, error) {
+func (m *Manager) Up(containerHandle string, inputs UpInputs, nsFD *uintptr) (*UpOutputs, error) {
 	if inputs.Pid == 0 {
 		return nil, errors.New("up missing pid")
 	}
@@ -70,6 +70,10 @@ func (m *Manager) Up(containerHandle string, inputs UpInputs) (*UpOutputs, error
 	}
 
 	procNsPath := fmt.Sprintf("/proc/%d/ns/net", inputs.Pid)
+	if nsFD != nil {
+		procNsPath = fmt.Sprintf("/proc/self/fd/%d", *nsFD)
+	}
+
 	bindMountPath := filepath.Join(m.BindMountRoot, containerHandle)
 
 	err := m.Mounter.IdempotentlyMount(procNsPath, bindMountPath)

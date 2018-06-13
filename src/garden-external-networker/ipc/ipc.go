@@ -17,11 +17,15 @@ import (
 )
 
 type Mux struct {
-	Up   func(handle string, inputs manager.UpInputs) (*manager.UpOutputs, error)
+	Up   func(handle string, inputs manager.UpInputs, netNSFD *uintptr) (*manager.UpOutputs, error)
 	Down func(handle string) error
 }
 
 func (m *Mux) Handle(action string, handle string, stdin io.Reader, stdout io.Writer) error {
+	return m.handle(action, handle, nil, stdin, stdout)
+}
+
+func (m *Mux) handle(action string, handle string, netNSFD *uintptr, stdin io.Reader, stdout io.Writer) error {
 	if handle == "" {
 		return fmt.Errorf("missing handle")
 	}
@@ -32,7 +36,7 @@ func (m *Mux) Handle(action string, handle string, stdin io.Reader, stdout io.Wr
 		if err := json.NewDecoder(stdin).Decode(&inputs); err != nil {
 			return err
 		}
-		outputs, err := m.Up(handle, inputs)
+		outputs, err := m.Up(handle, inputs, netNSFD)
 		if err != nil {
 			return err
 		}
@@ -74,7 +78,8 @@ func (m *Mux) handleOne(listener net.Listener) error {
 	}
 	defer connection.Close()
 
-	if _, err = readNsFileDescriptor(connection); err != nil {
+	nsFD, err := readNsFileDescriptor(connection)
+	if err != nil {
 		return err
 	}
 
@@ -83,7 +88,7 @@ func (m *Mux) handleOne(listener net.Listener) error {
 		return err
 	}
 
-	return m.Handle(string(msg.Command), string(msg.Handle), bytes.NewBuffer(msg.Data), connection)
+	return m.handle(string(msg.Command), string(msg.Handle), newUintptr(nsFD), bytes.NewBuffer(msg.Data), connection)
 }
 
 func readNsFileDescriptor(conn net.Conn) (uintptr, error) {
@@ -178,4 +183,8 @@ type SocketRequestErrorHandler interface {
 
 type ReadFileDescriptorFromConnection interface {
 	ReadNsFileDescriptor(conn net.Conn) (uintptr, error)
+}
+
+func newUintptr(u uintptr) *uintptr {
+	return &u
 }

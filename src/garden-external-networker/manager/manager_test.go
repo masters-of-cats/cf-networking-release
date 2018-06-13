@@ -106,7 +106,7 @@ var _ = Describe("Manager", func() {
 
 	Describe("Up", func() {
 		It("should ensure that the netNS is mounted to the provided path", func() {
-			_, err := mgr.Up(containerHandle, upInputs)
+			_, err := mgr.Up(containerHandle, upInputs, nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(mounter.IdempotentlyMountCallCount()).To(Equal(1))
@@ -116,7 +116,7 @@ var _ = Describe("Manager", func() {
 		})
 
 		It("should create proxy redirect rules in the container namespace", func() {
-			_, err := mgr.Up(containerHandle, upInputs)
+			_, err := mgr.Up(containerHandle, upInputs, nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(proxyRedirect.ApplyCallCount()).To(Equal(1))
@@ -125,7 +125,7 @@ var _ = Describe("Manager", func() {
 		})
 
 		It("should return the IP address in the CNI result as a property", func() {
-			out, err := mgr.Up(containerHandle, upInputs)
+			out, err := mgr.Up(containerHandle, upInputs, nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(out.Properties.ContainerIP).To(Equal("169.254.1.2"))
@@ -133,21 +133,21 @@ var _ = Describe("Manager", func() {
 		})
 
 		It("should return the DNS nameservers info as a separate key in the up ouput", func() {
-			out, err := mgr.Up(containerHandle, upInputs)
+			out, err := mgr.Up(containerHandle, upInputs, nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(out.DNSServers).To(Equal([]string{"8.8.8.8"}))
 		})
 
 		It("should return the search domains info as a separate key in the up ouput", func() {
-			out, err := mgr.Up(containerHandle, upInputs)
+			out, err := mgr.Up(containerHandle, upInputs, nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(out.SearchDomains).To(Equal([]string{"pivotal.io", "foo.bar", "baz.me"}))
 		})
 
 		It("should call CNI Up, passing in the bind-mounted path to the net ns", func() {
-			_, err := mgr.Up(containerHandle, upInputs)
+			_, err := mgr.Up(containerHandle, upInputs, nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(cniController.UpCallCount()).To(Equal(1))
@@ -159,13 +159,25 @@ var _ = Describe("Manager", func() {
 		})
 
 		It("returns the mapped ports", func() {
-			out, err := mgr.Up(containerHandle, upInputs)
+			out, err := mgr.Up(containerHandle, upInputs, nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(out.Properties.MappedPorts).To(MatchJSON(`[
 				{"HostPort": 12345, "ContainerPort": 7000},
 				{"HostPort": 23456, "ContainerPort": 7001}
 			]`))
+		})
+
+		Context("when a nsFD is provided", func() {
+			It("should ensure that the netNS is mounted to the provided path", func() {
+				_, err := mgr.Up(containerHandle, upInputs, newUintptr(42))
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(mounter.IdempotentlyMountCallCount()).To(Equal(1))
+				source, target := mounter.IdempotentlyMountArgsForCall(0)
+				Expect(source).To(Equal("/proc/self/fd/42"))
+				Expect(target).To(Equal(filepath.Join("some", "fake", "path", containerHandle)))
+			})
 		})
 
 		Context("when the host port is 0", func() {
@@ -180,7 +192,7 @@ var _ = Describe("Manager", func() {
 				portAllocator.AllocatePortReturns(1234, nil)
 			})
 			It("allocates a port", func() {
-				out, err := mgr.Up(containerHandle, upInputs)
+				out, err := mgr.Up(containerHandle, upInputs, nil)
 
 				Expect(err).NotTo(HaveOccurred())
 
@@ -215,7 +227,7 @@ var _ = Describe("Manager", func() {
 				portAllocator.AllocatePortReturns(0, errors.New("banana"))
 			})
 			It("returns an error", func() {
-				_, err := mgr.Up(containerHandle, upInputs)
+				_, err := mgr.Up(containerHandle, upInputs, nil)
 
 				Expect(err).To(MatchError("allocating port: banana"))
 			})
@@ -226,7 +238,7 @@ var _ = Describe("Manager", func() {
 				cniController.UpReturns(nil, nil)
 			})
 			It("returns an error", func() {
-				_, err := mgr.Up("container-handle", upInputs)
+				_, err := mgr.Up("container-handle", upInputs, nil)
 				Expect(err).To(MatchError("cni up failed: no ip allocated"))
 			})
 		})
@@ -237,17 +249,17 @@ var _ = Describe("Manager", func() {
 					Properties: gardenProperties,
 					NetOut:     netOutRules,
 					NetIn:      netInRules,
-				})
+				}, nil)
 				Expect(err).To(MatchError("up missing pid"))
 
-				_, err = mgr.Up("", upInputs)
+				_, err = mgr.Up("", upInputs, nil)
 				Expect(err).To(MatchError("up missing container handle"))
 			})
 		})
 
 		Context("when missing the garden properties are nil", func() {
 			It("should not complain", func() {
-				_, err := mgr.Up(containerHandle, manager.UpInputs{Pid: 42, Properties: nil})
+				_, err := mgr.Up(containerHandle, manager.UpInputs{Pid: 42, Properties: nil}, nil)
 				Expect(err).NotTo(HaveOccurred())
 			})
 		})
@@ -255,7 +267,7 @@ var _ = Describe("Manager", func() {
 		Context("when the encoded garden properties is an empty hash", func() {
 			It("should still call CNI and the netman agent", func() {
 				props := make(map[string]interface{})
-				_, err := mgr.Up(containerHandle, manager.UpInputs{Pid: 42, Properties: props})
+				_, err := mgr.Up(containerHandle, manager.UpInputs{Pid: 42, Properties: props}, nil)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cniController.UpCallCount()).To(Equal(1))
@@ -266,7 +278,7 @@ var _ = Describe("Manager", func() {
 		Context("when the mounter fails", func() {
 			It("should return the error", func() {
 				mounter.IdempotentlyMountReturns(errors.New("boom"))
-				_, err := mgr.Up(containerHandle, upInputs)
+				_, err := mgr.Up(containerHandle, upInputs, nil)
 				Expect(err).To(MatchError(fmt.Sprintf("failed mounting /proc/42/ns/net to %s: boom",
 					filepath.Join("some", "fake", "path", containerHandle))))
 			})
@@ -275,7 +287,7 @@ var _ = Describe("Manager", func() {
 		Context("when the cni Up fails", func() {
 			It("should return the error", func() {
 				cniController.UpReturns(nil, errors.New("bang"))
-				_, err := mgr.Up(containerHandle, upInputs)
+				_, err := mgr.Up(containerHandle, upInputs, nil)
 				Expect(err).To(MatchError("cni up failed: bang"))
 			})
 		})
@@ -283,7 +295,7 @@ var _ = Describe("Manager", func() {
 		Context("when the proxy redirect fails", func() {
 			It("should return the error", func() {
 				proxyRedirect.ApplyReturns(errors.New("bang"))
-				_, err := mgr.Up(containerHandle, upInputs)
+				_, err := mgr.Up(containerHandle, upInputs, nil)
 				Expect(err).To(MatchError("proxy redirect apply: bang"))
 			})
 		})
@@ -354,6 +366,9 @@ var _ = Describe("Manager", func() {
 				Expect(logger.String()).To(ContainSubstring("releasing ports: potato\n"))
 			})
 		})
-
 	})
 })
+
+func newUintptr(u uintptr) *uintptr {
+	return &u
+}
