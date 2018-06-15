@@ -8,6 +8,7 @@ files:
   - github.com/containernetworking/cni/scripts/*
   - code.cloudfoundry.org/filelock/*.go # gosub
   - code.cloudfoundry.org/garden/*.go # gosub
+  - code.cloudfoundry.org/netplugin-shim/message/*.go # gosub
   - garden-external-networker/*.go # gosub
   - garden-external-networker/adapter/*.go # gosub
   - garden-external-networker/bindmount/*.go # gosub

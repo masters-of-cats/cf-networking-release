@@ -1,7 +1,5 @@
-<% if p("bpm.enabled") %>
-check process server
-  with pidfile /var/vcap/sys/run/bpm/garden-cni/server.pid
-  start program "/var/vcap/jobs/bpm/bin/bpm start garden-cni"
-  stop program "/var/vcap/jobs/bpm/bin/bpm stop garden-cni"
+check process garden-cni
+  with pidfile /var/vcap/sys/run/garden-cni/garden-cni.pid
+  start program "/bin/sh -c '/var/vcap/jobs/garden-cni/bin/garden-cni_ctl start'" with timeout 120 seconds
+  stop program "/var/vcap/jobs/garden-cni/bin/garden-cni_ctl stop"
   group vcap
-<% end %>

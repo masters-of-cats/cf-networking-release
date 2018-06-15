@@ -4,10 +4,11 @@ name: garden-cni
 templates:
   pre-start.erb: bin/pre-start
   adapter.json.erb: config/adapter.json
-  bpm.yml: config/bpm.yml
+  garden-cni_ctl.erb: bin/garden-cni_ctl
 
 packages:
   - runc-cni
+  - sd-ctl-utils
 
 properties:
   cni_plugin_dir:
@@ -33,7 +34,3 @@ properties:
   experimental_proxy_redirect_cidr:
     description: "CIDR range to transparently redirect to a proxy process in the container namespace.  If empty (default), will not redirect any traffic."
     default: ""
-
-  bpm.enabled:
-    description: "Use bpm"
-    default: false
