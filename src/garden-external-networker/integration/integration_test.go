@@ -425,8 +425,15 @@ var _ = Describe("Garden External Networker", func() {
 		})
 
 		AfterEach(func() {
-			Expect(session.Terminate().Wait()).To(gexec.Exit())
+			session.Terminate()
+			Eventually(session, DEFAULT_TIMEOUT).Should(gexec.Exit())
 			Expect(os.RemoveAll(tmpDir)).To(Succeed())
+		})
+
+		It("deletes the socket on exit", func() {
+			session.Interrupt()
+			Eventually(session, DEFAULT_TIMEOUT).Should(gexec.Exit())
+			Expect(socketPath).NotTo(BeAnExistingFile())
 		})
 
 		It("should call CNI ADD and DEL", func() {

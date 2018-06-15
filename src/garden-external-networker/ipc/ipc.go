@@ -61,7 +61,7 @@ func (m *Mux) HandleWithSocket(logger io.Writer, socketPath string) error {
 	if err != nil {
 		return err
 	}
-	defer listener.Close()
+	closeOnKill(logger, listener)
 
 	for {
 		if err := m.handleOne(listener); err != nil {
@@ -159,24 +159,6 @@ func parseSocketControlMessage(b []byte) ([]unix.SocketControlMessage, error) {
 	return messages, nil
 }
 
-func onInterrupt(f func()) {
-	signalChannel := make(chan os.Signal, 1)
-	signal.Notify(signalChannel, syscall.SIGTERM, syscall.SIGINT)
-	go func() {
-		<-signalChannel
-		f()
-		os.Exit(0)
-	}()
-}
-
-func closeOnInterrupt(logger io.Writer, closer io.Closer) {
-	onInterrupt(func() {
-		if err := closer.Close(); err != nil {
-			fmt.Fprintln(logger, err)
-		}
-	})
-}
-
 type SocketRequestErrorHandler interface {
 	HandleError(writer io.Writer, err error)
 }
@@ -187,4 +169,16 @@ type ReadFileDescriptorFromConnection interface {
 
 func newUintptr(u uintptr) *uintptr {
 	return &u
+}
+
+func closeOnKill(logger io.Writer, closer io.Closer) {
+	signalChannel := make(chan os.Signal, 1)
+	signal.Notify(signalChannel, syscall.SIGTERM, syscall.SIGINT)
+	go func() {
+		<-signalChannel
+		if err := closer.Close(); err != nil {
+			fmt.Fprintln(logger, err)
+		}
+		os.Exit(0)
+	}()
 }
