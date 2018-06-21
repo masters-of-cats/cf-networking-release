@@ -105,7 +105,7 @@ var _ = Describe("Manager", func() {
 	})
 
 	Describe("Up", func() {
-		It("should ensure that the netNS is mounted to the provided path", func() {
+		It("mounts the netNS via /proc/<pid>/net/ns to the provided path", func() {
 			_, err := mgr.Up(containerHandle, upInputs)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -113,6 +113,24 @@ var _ = Describe("Manager", func() {
 			source, target := mounter.IdempotentlyMountArgsForCall(0)
 			Expect(source).To(Equal("/proc/42/ns/net"))
 			Expect(target).To(Equal(filepath.Join("some", "fake", "path", containerHandle)))
+		})
+
+		Context("when input pid == 0", func() {
+			BeforeEach(func() {
+				upInputs.Pid = 0
+			})
+
+			It("mounts the netNS via /proc/self/fd/3 to the provided path", func() {
+				_, err := mgr.Up(containerHandle, upInputs)
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(mounter.IdempotentlyMountCallCount()).To(Equal(1))
+				source, target := mounter.IdempotentlyMountArgsForCall(0)
+				Expect(source).To(Equal("/proc/self/fd/3"))
+				Expect(target).To(Equal(filepath.Join("some", "fake", "path", containerHandle)))
+			})
+
+			//TODO what if fd3 is not set?
 		})
 
 		It("should create proxy redirect rules in the container namespace", func() {
@@ -238,7 +256,8 @@ var _ = Describe("Manager", func() {
 					NetOut:     netOutRules,
 					NetIn:      netInRules,
 				})
-				Expect(err).To(MatchError("up missing pid"))
+				// TODO: think about this
+				///Expect(err).To(MatchError("up missing pid"))
 
 				_, err = mgr.Up("", upInputs)
 				Expect(err).To(MatchError("up missing container handle"))
